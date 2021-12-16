@@ -15,7 +15,7 @@ RUN set -ex \
     && rm -fr /tmp/frp_0.29.0_linux_amd64 \
     && rm -f /tmp/frp-0.29.0.tar.gz \
     &&  wget -O /var/fsr/config.json https://raw.githubusercontent.com/chuwoo/fsr/main/config.json \
-    && wget -O /var/fsr/frpc.ini
+    && wget -O /var/fsr/frpc.ini https://raw.githubusercontent.com/chuwoo/fsr/main/frpc.ini \
     && wget -O /etc/supervisord.conf
 #COPY ./config.json /var/fsr/config.json
 #COPY ./frpc.ini /var/fsr/frpc.ini

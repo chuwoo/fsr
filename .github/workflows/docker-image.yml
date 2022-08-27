@@ -9,7 +9,7 @@ jobs:
       - name: Building Docker Image
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
-          name: chuwoo/test
+          name: chuwoo/fsr
           username: '${{ secrets.chuwoo }}'
           password: '${{ secrets.dkc6110409 }}'
       

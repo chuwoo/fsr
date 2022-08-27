@@ -10,6 +10,6 @@ jobs:
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
           name: chuwoo/fsr
-          username: '${{ secrets.chuwoo }}'
-          password: '${{ secrets.dkc6110409 }}'
+          username: '${{ secrets. }}'
+          password: '${{ secrets. }}'
       

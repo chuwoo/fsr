@@ -1,0 +1,47 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="106" tvg-name="CCTV4K" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV4k.png" group-title="中国",CCTV-4K
+http://[2409:8c02:21c:60::2b]/live.rxip.sc96655.com/live/ys4Kcq_2000.m3u8
+#EXTINF:-1 tvg-id="2" tvg-name="苏州" tvg-logo="" group-title="中国",苏州
+http://liveshowbak2.kan0512.com/ksz-norecord/csztv4k_4k.m3u8
+#EXTINF:-1 tvg-id="3" tvg-name="电影" tvg-logo="" group-title="中国",测试
+http://[2409:8087:7000:20:1000::22]:6060/yinhe/2/ch00000090990000001709/index.m3u8?virtualDomain=yinhe.live_hls.zte.com
+#EXTINF:-1 tvg-id="5" tvg-name="UHD" tvg-logo="http://n.ysyz.top:99/buyaolian/cctv5.png" group-title="中国",UHD
+http://[2409:8087:3869:8021:1001::e5]:6610/PLTV/88888888/224/3221225786/2/index.m3u8
+#EXTINF:-1 tvg-id="106" tvg-name="CCTV1" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV1.png" group-title="央视",cctv1
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000036/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="CCTV2" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV2.png" group-title="央视",cctv2
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000050/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="CCTV5" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV5.png" group-title="央视",cctv5
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000053/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="CCTV5+" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV5+.png" group-title="央视",cctv5+
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000061/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="CCTV13" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV13.png" group-title="央视",cctv13
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000000045000000287929/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="东方卫视" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/dongfang.png" group-title="卫视",东方卫视
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000064/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="北京卫视" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/beijing.png" group-title="卫视",北京卫视
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000062/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="江苏卫视" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/jiangsu.png" group-title="卫视",江苏卫视
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000043/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="浙江卫视" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/zhejiang.png" group-title="卫视",浙江卫视
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000042/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="深圳卫视" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/shenzhen.png" group-title="卫视",深圳卫视
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000065/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="湖南卫视" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",湖南卫视
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000035/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="湖南经视" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",湖南经视
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000000002000000027983/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="湖南都市" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",湖南都市
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000041/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="湖南电影" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",湖南电影
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000038/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="湖南电视剧" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",湖南电视剧
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000037/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="湖南娱乐" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",湖南娱乐
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000040/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="金鹰纪实" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",金鹰纪实
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001007000000063477/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="湖南教育" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="湖南",湖南教育
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001016000000368716/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="106" tvg-name="无线新闻" tvg-logo="http://epg.51zmt.top:8000/tb1/ws/hunan.png" group-title="香港",无线新闻
+https://php.52sf.ga/@Curly_MouseIPTV-TVB.php?id=1

@@ -11,9 +11,13 @@ http://[2409:8087:3869:8021:1001::e5]:6610/PLTV/88888888/224/3221225786/2/index.
 http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000036/main.m3u8?湖南IPv6
 #EXTINF:-1 tvg-id="2" tvg-name="CCTV2" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV2.png" group-title="央视",cctv2
 http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000050/main.m3u8?湖南IPv6
-#EXTINF:-1 tvg-id="3" tvg-name="CCTV5" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV5.png" group-title="央视",cctv5
+#EXTINF:-1 tvg-id="3" tvg-name="CCTV3" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV3.png" group-title="央视",cctv3
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000051/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="4" tvg-name="CCTV3" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV4.png" group-title="央视",cctv4
+http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000052/main.m3u8?湖南IPv6
+#EXTINF:-1 tvg-id="5" tvg-name="CCTV5" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV5.png" group-title="央视",cctv5
 http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000053/main.m3u8?湖南IPv6
-#EXTINF:-1 tvg-id="5" tvg-name="CCTV5+" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV5+.png" group-title="央视",cctv5+
+#EXTINF:-1 tvg-id="6" tvg-name="CCTV5+" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV5+.png" group-title="央视",cctv5+
 http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000061/main.m3u8?湖南IPv6
 #EXTINF:-1 tvg-id="13" tvg-name="CCTV13" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV13.png" group-title="央视",cctv13
 http://[2409:8087:5011:1020::1d]/180000001001/00000001000000000045000000287929/main.m3u8?湖南IPv6

@@ -9,8 +9,6 @@ http://[2409:8087:7000:20:1000::22]:6060/yinhe/2/ch00000090990000001709/index.m3
 http://[2409:8087:3869:8021:1001::e5]:6610/PLTV/88888888/224/3221225786/2/index.m3u8
 #EXTINF:-1 tvg-id=43" tvg-name="CCTV16" tvg-logo="http://n.ysyz.top:99/buyaolian/cctv16.png" group-title="4K",CCTV16
 http://[2409:8087:1070:301:2028::23]/gslbserv.iptv.nm.chinamobile.com/PLTV/88888890/224/3221226301/index.m3u8?fmt=ts2hls
-#EXTINF:-1 tvg-id=43" tvg-name="都市剧场" tvg-logo="http://n.ysyz.top:99/buyaolian/cctv16.png" group-title="4K",都市剧场
-http://[2409:8087:4402:20:1:1216:401:3b]/iptv.cdn.ha.chinamobile.com/PLTV/88888888/224/3221226324/index.m3u8
 #EXTINF:-1 tvg-id="1" tvg-name="CCTV1" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV1.png" group-title="央视",cctv1
 http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001001000000000036/main.m3u8?湖南IPv6
 #EXTINF:-1 tvg-id="2" tvg-name="CCTV2" tvg-logo="http://epg.51zmt.top:8000/tb1/CCTV/CCTV2.png" group-title="央视",cctv2
@@ -53,6 +51,8 @@ http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001007000000063477/m
 http://[2409:8087:5011:1020::1d]/180000001001/00000001000000001016000000368716/main.m3u8?湖南IPv6
 #EXTINF:-1 tvg-id="38" tvg-name="无线新闻" tvg-logo="http://www.tvyan.com/uploads/dianshi/tvb-news.jpg" group-title="港台",无线新闻
 https://php.52sf.ga/@Curly_MouseIPTV-TVB.php?id=1
+#EXTINF:-1 tvg-id="38" tvg-name="tvbs" tvg-logo="http://www.tvyan.com/uploads/dianshi/tvb-news.jpg" group-title="港台",tvbs新闻
+http://38.64.72.148:80/hls/modn/list/4006/chunklist1.m3u8
 #EXTINF:-1 tvg-id="38" tvg-name="凤凰中文" tvg-logo="http://epg.51zmt.top:8000/tb1/gt/fenghuangzhongwen.png" group-title="港台",凤凰中文
 http://[2409:8087:3428:20:500::1009]:6610/PLTV/88888888/224/3221227222/index.m3u8?servicetype=1&IASHttpSessionId=RR423820220409134714119178
 #EXTINF:-1 tvg-id="38" tvg-name="凤凰资讯" tvg-logo="http://epg.51zmt.top:8000/tb1/gt/fenghuangzixun.png" group-title="港台",凤凰资讯

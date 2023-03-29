@@ -1,5 +1,6 @@
 FROM python:2.7-alpine
 LABEL maintainer="chuwoo <chuwooem@gmail.com>"
+USER root
 RUN set -ex \
         && apk add --no-cache tar libsodium-dev openssl \
         && apk add supervisor \

@@ -26,4 +26,5 @@ RUN set -ex \
 WORKDIR /var/fsr
 #EXPOSE 5555
 EXPOSE 7000
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+RUN echo user=root >>  /etc/supervisord.conf
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf","-n"]

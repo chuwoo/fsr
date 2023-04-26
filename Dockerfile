@@ -10,11 +10,11 @@ RUN set -ex \
         && mv /tmp/shadowsocksr-3.2.2/shadowsocks /var/fsr/ \
         && rm -fr /tmp/shadowsocksr-3.2.2 \
         && rm -f /tmp/shadowsocksr-3.2.2.tar.gz \
-        && wget -O /tmp/frp-0.29.0.tar.gz https://github.com/fatedier/frp/releases/download/v0.29.0/frp_0.29.0_linux_amd64.tar.gz \
-    && tar zxf /tmp/frp-0.29.0.tar.gz -C /tmp \
-    && mv /tmp/frp_0.29.0_linux_amd64/frpc /var/fsr/ \
-    && rm -fr /tmp/frp_0.29.0_linux_amd64 \
-    && rm -f /tmp/frp-0.29.0.tar.gz \
+        && wget -O /tmp/frp-0.48.0.tar.gz https://github.com/fatedier/frp/releases/download/v0.29.0/frp_0.48.0_linux_amd64.tar.gz \
+    && tar zxf /tmp/frp-0.48.0.tar.gz -C /tmp \
+    && mv /tmp/frp_0.48.0_linux_amd64/frpc /var/fsr/ \
+    && rm -fr /tmp/frp_0.48.0_linux_amd64 \
+    && rm -f /tmp/frp-0.48.0.tar.gz \
     && wget -O /var/fsr/config.json https://raw.githubusercontent.com/chuwoo/fsr/main/config.json \
     && wget -O /var/fsr/frpc.ini https://raw.githubusercontent.com/chuwoo/fsr/main/frpc.ini \
     && wget -O /etc/supervisord.conf https://raw.githubusercontent.com/chuwoo/fsr/main/supervisord.conf

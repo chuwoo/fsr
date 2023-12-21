@@ -26,6 +26,6 @@ RUN set -ex \
 #RUN chmod +x /var/fsr/entrypoint.sh
 WORKDIR /var/fsr
 #EXPOSE 5555
-EXPOSE 7000
+EXPOSE 3000
 #RUN echo user=root >>  /etc/supervisord.conf
 CMD ["/usr/bin/supervisord","-n", "-c", "/etc/supervisord.conf"]

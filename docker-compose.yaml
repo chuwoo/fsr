@@ -1,5 +1,10 @@
-services:
-  areyouok:
-    build: .
-    ports:
-      - 3000:3000
+version: '3'
+  services:
+    fsr:
+      build: .
+      container_name: fsr
+      restart: always
+      ports:
+        - 3000:3000
+
+    

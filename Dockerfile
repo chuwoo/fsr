@@ -1,7 +1,7 @@
 FROM python:2.7-alpine
 LABEL maintainer="chuwoo <chuwooem@gmail.com>"
-#USER root
-USER 15555
+USER root
+#USER 15555
 RUN set -ex \
         && apk add --no-cache tar libsodium-dev openssl \
         && apk add supervisor \
@@ -25,7 +25,7 @@ RUN set -ex \
 #COPY ./entrypoint.sh /var/fsr/entrypoint.sh
 #RUN chmod +x /var/fsr/entrypoint.sh
 WORKDIR /var/fsr
-#EXPOSE 5555
-EXPOSE 3000
+EXPOSE 5555
+#EXPOSE 3000
 #RUN echo user=root >>  /etc/supervisord.conf
 CMD ["/usr/bin/supervisord","-n", "-c", "/etc/supervisord.conf"]

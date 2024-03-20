@@ -19,6 +19,7 @@ RUN set -ex \
     && chmod 644 /var/fsr/frpc.ini \
     && wget -O /etc/supervisord.conf https://raw.githubusercontent.com/chuwoo/fsr/main/supervisord.conf
 WORKDIR /var/fsr
+VOLUME /var/fsr
 #EXPOSE 5555
 #EXPOSE 3000
 #RUN echo user=root >>  /etc/supervisord.conf

@@ -16,6 +16,7 @@ RUN set -ex \
     && rm -f /tmp/frp-0.48.0.tar.gz \
     && wget -O /var/fsr/config.json https://raw.githubusercontent.com/chuwoo/fsr/main/config.json \
     && wget -O /var/fsr/frpc.ini https://raw.githubusercontent.com/chuwoo/fsr/main/frpc.ini \
+    && chmod 644 /var/fsr/frpc.ini \
     && wget -O /etc/supervisord.conf https://raw.githubusercontent.com/chuwoo/fsr/main/supervisord.conf
 WORKDIR /var/fsr
 #EXPOSE 5555

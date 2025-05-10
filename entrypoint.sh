@@ -21,7 +21,7 @@ DEFAULT_CONFIG_SOURCE_PATH="/etc/default.frpc.ini"
 #    要从 GitHub 下载的 INI 文件的名称。
 #    必须通过环境变量 GITHUB_INI_FILENAME 指定。
 if [ -z "${FRP_CONF}" ]; then
-  #echo "信息：环境变量 GITHUB_INI_FILENAME 未设置。"
+  echo "信息：环境变量 GITHUB_INI_FILENAME 未设置。"
   # If GITHUB_INI_FILENAME is not set, we will proceed to use the default config directly.
   # 如果 GITHUB_INI_FILENAME 未设置，我们将直接尝试使用默认配置。
   REMOTE_INI_SOURCE_URL="" # Mark that no download will be attempted
@@ -71,12 +71,12 @@ mkdir -p "${TARGET_CONFIG_DIR}"
 # 如果提供了 GITHUB_INI_FILENAME，则尝试下载配置文件
 download_successful=false
 if [ -n "${REMOTE_INI_SOURCE_URL}" ]; then
-  #echo "尝试从 GitHub 路径 ${FIXED_GITHUB_REPO_RAW_BASE_URL} 下载配置文件: ${GITHUB_INI_FILENAME}"
-  #echo "完整的下载 URL 为: ${REMOTE_INI_SOURCE_URL}"
-  #echo "下载后将在容器内保存为: ${TARGET_CONFIG_FINAL_PATH}"
+  echo "尝试从 GitHub 路径 ${FIXED_GITHUB_REPO_RAW_BASE_URL} 下载配置文件: ${GITHUB_INI_FILENAME}"
+  echo "完整的下载 URL 为: ${REMOTE_INI_SOURCE_URL}"
+  echo "下载后将在容器内保存为: ${TARGET_CONFIG_FINAL_PATH}"
 
   if wget -S -q -O "${TARGET_CONFIG_FINAL_PATH}" "${REMOTE_INI_SOURCE_URL}"; then
-    #echo "成功下载 ${GITHUB_INI_FILENAME} 并另存为 ${TARGET_CONFIG_FINAL_PATH}"
+    echo "成功下载 ${GITHUB_INI_FILENAME} 并另存为 ${TARGET_CONFIG_FINAL_PATH}"
     chmod 644 "${TARGET_CONFIG_FINAL_PATH}" # Set appropriate permissions / 设置适当的权限
     download_successful=true
   else
@@ -92,7 +92,7 @@ fi
 # If download was not successful, try to use the default config or an existing one.
 # 如果下载不成功，则尝试使用默认配置或已存在的配置。
 if [ "${download_successful}" = "false" ]; then
-  #echo "下载未成功或未尝试下载。"
+  echo "下载未成功或未尝试下载。"
   # Check if the target file already exists (e.g., from a volume mount or previous successful run before restart)
   # 检查目标文件是否已存在（例如，通过卷挂载或在重启前上次成功运行后留下的文件）
   if [ -f "${TARGET_CONFIG_FINAL_PATH}" ] && [ -n "${REMOTE_INI_SOURCE_URL}" ]; then
@@ -100,13 +100,13 @@ if [ "${download_successful}" = "false" ]; then
     # We prioritize the default config over a potentially stale/incorrect pre-existing file if download fails.
     # So, we'll proceed to check for default. If user explicitly wants to use a volume-mounted file
     # even on download failure, they should not set GITHUB_INI_FILENAME.
-    #echo "警告：下载 ${GITHUB_INI_FILENAME} 失败，但目标路径 ${TARGET_CONFIG_FINAL_PATH} 已存在文件。"
-    #echo "将优先尝试使用镜像内预置的默认配置文件（如果下载指定文件失败）。"
+    echo "警告：下载 ${GITHUB_INI_FILENAME} 失败，但目标路径 ${TARGET_CONFIG_FINAL_PATH} 已存在文件。"
+    echo "将优先尝试使用镜像内预置的默认配置文件（如果下载指定文件失败）。"
   elif [ -f "${TARGET_CONFIG_FINAL_PATH}" ] && [ -z "${REMOTE_INI_SOURCE_URL}" ]; then
     # This case means: GITHUB_INI_FILENAME was NOT set, so no download was attempted.
     # A file exists at the target path, likely from a volume or a previous run.
     # We should use this existing file.
-    #echo "信息：未指定 GITHUB_INI_FILENAME 进行下载，且目标路径 ${TARGET_CONFIG_FINAL_PATH} 已存在文件。将使用此现有文件。"
+    echo "信息：未指定 GITHUB_INI_FILENAME 进行下载，且目标路径 ${TARGET_CONFIG_FINAL_PATH} 已存在文件。将使用此现有文件。"
     # frpc will use this existing TARGET_CONFIG_FINAL_PATH
   fi
 

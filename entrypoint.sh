@@ -84,7 +84,7 @@ if [ -n "${REMOTE_INI_SOURCE_URL}" ]; then
     # download_successful remains false
   fi
 else
-  #echo "信息：未指定 GITHUB_INI_FILENAME，将跳过下载步骤。"
+  echo "信息：未指定 GITHUB_INI_FILENAME，将跳过下载步骤。"
   # download_successful remains false, we need to use default or pre-existing.
 fi
 

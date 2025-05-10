@@ -80,7 +80,7 @@ if [ -n "${REMOTE_INI_SOURCE_URL}" ]; then
     chmod 644 "${TARGET_CONFIG_FINAL_PATH}" # Set appropriate permissions / 设置适当的权限
     download_successful=true
   else
-    #echo "警告：从 ${REMOTE_INI_SOURCE_URL} 下载 ${GITHUB_INI_FILENAME} 失败。"
+    echo "警告：从 ${REMOTE_INI_SOURCE_URL} 下载 ${GITHUB_INI_FILENAME} 失败。"
     # download_successful remains false
   fi
 else

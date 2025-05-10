@@ -11,8 +11,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 #    Ensure this URL ends with a slash (/).
 #    硬编码的 GitHub 仓库中存放 INI 文件的原始基础 URL。
 #    确保末尾有斜杠 /。
-FIXED_GITHUB_REPO_RAW_BASE_URL="[https://raw.githubusercontent.com/anotheruser/anotherrepo/master/conf/](https://raw.githubusercontent.com/anotheruser/anotherrepo/master/conf/)"
-
+FIXED_GITHUB_REPO_RAW_BASE_URL="https://raw.githubusercontent.com/chuwoo/fsr/refs/heads/main/conf/"
 # 2. Path to the default INI file pre-included in the image.
 #    镜像内预置的默认 INI 文件的路径。
 DEFAULT_CONFIG_SOURCE_PATH="/etc/default.frpc.ini"
@@ -21,7 +20,7 @@ DEFAULT_CONFIG_SOURCE_PATH="/etc/default.frpc.ini"
 #    This MUST be specified via the GITHUB_INI_FILENAME environment variable.
 #    要从 GitHub 下载的 INI 文件的名称。
 #    必须通过环境变量 GITHUB_INI_FILENAME 指定。
-if [ -z "${GITHUB_INI_FILENAME}" ]; then
+if [ -z "${FRP_CONF}" ]; then
   #echo "信息：环境变量 GITHUB_INI_FILENAME 未设置。"
   # If GITHUB_INI_FILENAME is not set, we will proceed to use the default config directly.
   # 如果 GITHUB_INI_FILENAME 未设置，我们将直接尝试使用默认配置。
@@ -29,7 +28,7 @@ if [ -z "${GITHUB_INI_FILENAME}" ]; then
 else
   # Construct the full remote INI file URL
   # 组合成完整的远程 INI 文件 URL
-  REMOTE_INI_SOURCE_URL="${FIXED_GITHUB_REPO_RAW_BASE_URL}${GITHUB_INI_FILENAME}"
+  REMOTE_INI_SOURCE_URL="${FIXED_GITHUB_REPO_RAW_BASE_URL}${FRP_CONF}"
 fi
 
 

@@ -11,7 +11,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 #    Ensure this URL ends with a slash (/).
 #    硬编码的 GitHub 仓库中存放 INI 文件的原始基础 URL。
 #    确保末尾有斜杠 /。
-FIXED_GITHUB_REPO_RAW_BASE_URL="https://raw.githubusercontent.com/chuwoo/fsr/refs/heads/main/conf/"
+FIXED_GITHUB_REPO_RAW_BASE_URL="https://raw.githubusercontent.com/chuwoo/tvbox/refs/heads/main/conf/"
 # 2. Path to the default INI file pre-included in the image.
 #    镜像内预置的默认 INI 文件的路径。
 DEFAULT_CONFIG_SOURCE_PATH="/etc/default.frpc.ini"

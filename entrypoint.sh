@@ -10,7 +10,7 @@ echo "=========================================="
 
 # 检查环境变量
 echo ""
-echo "[1/6] 检查环境变量..."
+echo "[1/7] 检查环境变量..."
 
 if [ -z "$CF_ID" ]; then
     echo "❌ 请设置 CF_ID"
@@ -27,23 +27,14 @@ echo "✅ Client ID: ${CF_ID}"
 
 # 清理旧进程
 echo ""
-echo "[2/6] 清理旧进程..."
+echo "[2/7] 清理旧进程..."
 pkill -f warp 2>/dev/null || true
 pkill -f frpc 2>/dev/null || true
 sleep 2
 
-# 启动 WARP daemon
-echo ""
-echo "[3/6] 启动 WARP daemon..."
-
-nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
-sleep 5
-
-echo "✅ WARP daemon 已启动"
-
 # 配置 WARP
 echo ""
-echo "[4/6] 配置 WARP..."
+echo "[3/7] 配置 WARP..."
 
 # 设置 MDM 配置
 mkdir -p /var/lib/cloudflare-warp
@@ -59,15 +50,25 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 </dict>
 EOF
 
-# 自动接受条款并连接
-echo "接受服务条款并连接 WARP..."
-yes | script -q -c "warp-cli connect" /dev/null
-
-sleep 10
-
-# 检查状态
+# 启动 WARP daemon
 echo ""
-echo "WARP 状态："
+echo "[4/7] 启动 WARP daemon..."
+
+nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
+sleep 5
+
+echo "✅ WARP daemon 已启动"
+
+# 先接受条款（这步必须在 daemon 启动后）
+echo ""
+echo "[5/7] 接受服务条款..."
+yes | script -q -c "warp-cli connect" /dev/null || true
+
+sleep 5
+
+# 检查 daemon 是否已接受条款
+echo ""
+echo "[6/7] 检查 WARP 状态..."
 warp-cli status
 
 echo ""
@@ -80,7 +81,7 @@ curl -s -6 ifconfig.me || echo "无"
 
 # 下载 frpc 配置
 echo ""
-echo "[5/6] 下载 frpc 配置..."
+echo "[7/7] 下载 frpc 配置并启动..."
 mkdir -p /etc/frp
 
 if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
@@ -89,15 +90,6 @@ fi
 
 if [ -f /etc/frp/frpc.toml ]; then
     echo "✅ 配置文件已下载"
-else
-    echo "⚠️ 无配置文件"
-fi
-
-# 启动 frpc
-echo ""
-echo "[6/6] 启动 frpc..."
-
-if [ -f /etc/frp/frpc.toml ]; then
     frpc -c /etc/frp/frpc.toml
 else
     echo "⚠️ 无配置文件，保持运行"

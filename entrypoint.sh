@@ -6,9 +6,13 @@ echo "=========================================="
 echo "  Cloudflare Tunnel + frpc 启动脚本"
 echo "=========================================="
 
-# ============================================
-# 1. 检查环境变量
-# ============================================
+# 调试信息
+echo ""
+echo "[DEBUG] PATH: $PATH"
+echo "[DEBUG] which cloudflared: $(which cloudflared 2>/dev/null || echo 'not found')"
+echo "[DEBUG] which frpc: $(which frpc 2>/dev/null || echo 'not found')"
+
+# 检查环境变量
 echo ""
 echo "[1/5] 检查环境变量..."
 
@@ -25,38 +29,58 @@ fi
 echo "✅ CF_ID: ${CF_ID}"
 echo "✅ CF_TOKEN: 已设置"
 
-# ============================================
-# 2. 启动 Cloudflare Tunnel
-# ============================================
+# 检查 cloudflared 是否可用
 echo ""
-echo "[2/5] 启动 Cloudflare Tunnel..."
+echo "[2/5] 检查 cloudflared..."
+
+if ! command -v cloudflared &> /dev/null; then
+    echo "❌ cloudflared 未安装，尝试手动安装..."
+    ARCH=$(dpkg --print-architecture)
+    curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}.deb \
+        -o /tmp/cloudflared.deb
+    dpkg -i /tmp/cloudflared.deb
+    rm /tmp/cloudflared.deb
+fi
+
+cloudflared --version
+
+# 启动 Cloudflare Tunnel
+echo ""
+echo "[3/5] 启动 Cloudflare Tunnel..."
 
 # 清理旧的 tunnel 进程
 pkill -f cloudflared 2>/dev/null || true
-sleep 1
+sleep 2
+
+# 检查端口占用
+netstat -tuln 2>/dev/null || ss -tuln
 
 # 后台启动 cloudflared tunnel
-cloudflared tunnel run --id "${CF_ID}" --token "${CF_TOKEN}" &
+nohup cloudflared tunnel run --id "${CF_ID}" --token "${CF_TOKEN}" > /var/log/cloudflared.log 2>&1 &
 CLOUDFLARED_PID=$!
 
 echo "✅ Cloudflare Tunnel 已启动 (PID: $CLOUDFLARED_PID)"
 
 # 等待 tunnel 建立
-sleep 10
+echo "等待 Tunnel 建立..."
+for i in {1..15}; do
+    sleep 2
+    if ps -p $CLOUDFLARED_PID > /dev/null 2>&1; then
+        echo "✅ Tunnel 运行正常 (${i}*2秒)"
+        break
+    else
+        echo "⏳ 等待中... (${i}/15)"
+    fi
+done
 
-# 检查 tunnel 状态
-if ps -p $CLOUDFLARED_PID > /dev/null 2>&1; then
-    echo "✅ Tunnel 运行正常"
-else
-    echo "❌ Tunnel 启动失败"
-    exit 1
-fi
-
-# ============================================
-# 3. 下载 frpc 配置文件
-# ============================================
+# 检查日志
 echo ""
-echo "[3/5] 下载 frpc 配置文件..."
+echo "[DEBUG] Tunnel 日志："
+tail -20 /var/log/cloudflared.log 2>/dev/null || true
+
+# 下载 frpc 配置文件
+echo ""
+echo "[4/5] 下载 frpc 配置文件..."
 
 mkdir -p /etc/frp
 
@@ -67,7 +91,7 @@ if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
     curl -fsSL "${FRPC_URL}" -o /etc/frp/frpc.toml
     
     if [ -f /etc/frp/frpc.toml ]; then
-        echo "✅ 配置文件已保存到 /etc/frp/frpc.toml"
+        echo "✅ 配置文件已保存"
     else
         echo "❌ 配置文件下载失败"
         exit 1
@@ -76,48 +100,58 @@ else
     echo "⚠️ 警告：FRP_REPO 或 FRP_CON 未设置，跳过下载"
 fi
 
-# 显示配置文件内容（调试用）
 echo ""
 echo "frpc 配置文件内容："
 cat /etc/frp/frpc.toml 2>/dev/null || echo "（配置文件不存在）"
 
-# ============================================
-# 4. 启动 frpc
-# ============================================
+# 启动 frpc
 echo ""
-echo "[4/5] 启动 frpc..."
+echo "[5/5] 启动 frpc..."
 
-frpc -c /etc/frp/frpc.toml &
-FRPC_PID=$!
+if [ -f /etc/frp/frpc.toml ]; then
+    nohup frpc -c /etc/frp/frpc.toml > /var/log/frpc.log 2>&1 &
+    FRPC_PID=$!
+    echo "✅ frpc 已启动 (PID: $FRPC_PID)"
+else
+    echo "⚠️ 跳过 frpc（无配置文件）"
+    FRPC_PID=""
+fi
 
-echo "✅ frpc 已启动 (PID: $FRPC_PID)"
-
-# ============================================
-# 5. 监控进程
-# ============================================
+# 监控进程
 echo ""
-echo "[5/5] 进入监控模式..."
+echo "=========================================="
+echo "  进入监控模式..."
+echo "=========================================="
 
-# trap 信号处理，确保退出时清理进程
-trap 'kill $CLOUDFLARED_PID $FRPC_PID 2>/dev/null; exit' SIGTERM SIGINT
+# 信号处理
+cleanup() {
+    echo "收到停止信号，清理进程..."
+    [ -n "$CLOUDFLARED_PID" ] && kill $CLOUDFLARED_PID 2>/dev/null || true
+    [ -n "$FRPC_PID" ] && kill $FRPC_PID 2>/dev/null || true
+    exit 0
+}
 
-# 监控进程状态
+trap cleanup SIGTERM SIGINT
+
+# 监控循环
 while true; do
     sleep 30
     
-    # 检查 frpc
-    if ! ps -p $FRPC_PID > /dev/null 2>&1; then
-        echo "⚠️ frpc 进程已退出，尝试重启..."
-        frpc -c /etc/frp/frpc.toml &
-        FRPC_PID=$!
+    if [ -n "$CLOUDFLARED_PID" ]; then
+        if ! ps -p $CLOUDFLARED_PID > /dev/null 2>&1; then
+            echo "⚠️ Cloudflare Tunnel 已退出，重新启动..."
+            nohup cloudflared tunnel run --id "${CF_ID}" --token "${CF_TOKEN}" > /var/log/cloudflared.log 2>&1 &
+            CLOUDFLARED_PID=$!
+        fi
     fi
     
-    # 检查 cloudflared
-    if ! ps -p $CLOUDFLARED_PID > /dev/null 2>&1; then
-        echo "⚠️ Cloudflare Tunnel 已退出，尝试重启..."
-        cloudflared tunnel run --id "${CF_ID}" --token "${CF_TOKEN}" &
-        CLOUDFLARED_PID=$!
+    if [ -n "$FRPC_PID" ]; then
+        if ! ps -p $FRPC_PID > /dev/null 2>&1; then
+            echo "⚠️ frpc 已退出，重新启动..."
+            nohup frpc -c /etc/frp/frpc.toml > /var/log/frpc.log 2>&1 &
+            FRPC_PID=$!
+        fi
     fi
     
-    echo "✅ $(date '+%Y-%m-%d %H:%M:%S') - frpc: 运行中, tunnel: 运行中"
+    echo "✅ $(date '+%Y-%m-%d %H:%M:%S') - 运行中"
 done

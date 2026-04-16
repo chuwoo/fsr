@@ -36,16 +36,32 @@ sleep 2
 echo ""
 echo "[3/5] 配置 WARP..."
 
-mkdir -p /var/lib/cloudflare-warp/Id
-mkdir -p /var/lib/cloudflare-warp/Secret
+# 停止现有服务
+systemctl stop warp-svc 2>/dev/null || true
+pkill -9 warp-svc 2>/dev/null || true
 
-echo "${CF_ID}" > /var/lib/cloudflare-warp/Id/$(hostname)
-echo "${CF_TOKEN}" > /var/lib/cloudflare-warp/Secret/$(hostname)
+# 创建配置目录
+mkdir -p /var/lib/cloudflare-warp
 
-# 注册并连接 WARP
-warp-cli set-organization "${CF_TEAM}"
-warp-cli register || true
-warp-cli connect
+# 设置 MDM 配置（包含团队信息）
+cat > /var/lib/cloudflare-warp/mdm.xml << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<dict>
+    <key>organization</key>
+    <string>${CF_TEAM}</string>
+    <key>auth_client_id</key>
+    <string>${CF_ID}</string>
+    <key>auth_client_secret</key>
+    <string>${CF_TOKEN}</string>
+</dict>
+EOF
+
+# 注册并连接
+echo "注册 WARP..."
+warp-cli register --accept-tos || true
+
+echo "连接 WARP..."
+warp-cli connect || true
 
 sleep 10
 

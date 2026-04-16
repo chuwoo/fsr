@@ -10,7 +10,7 @@ echo "=========================================="
 
 # 检查环境变量
 echo ""
-echo "[1/5] 检查环境变量..."
+echo "[1/6] 检查环境变量..."
 
 if [ -z "$CF_ID" ]; then
     echo "❌ 请设置 CF_ID"
@@ -27,23 +27,33 @@ echo "✅ Client ID: ${CF_ID}"
 
 # 清理旧进程
 echo ""
-echo "[2/5] 清理旧进程..."
+echo "[2/6] 清理旧进程..."
 pkill -f warp 2>/dev/null || true
 pkill -f frpc 2>/dev/null || true
 sleep 2
 
+# 启动 WARP daemon
+echo ""
+echo "[3/6] 启动 WARP daemon..."
+
+# 后台启动 warp-svc
+nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
+sleep 5
+
+# 检查 daemon 状态
+if pgrep -x warp-svc > /dev/null; then
+    echo "✅ WARP daemon 已启动"
+else
+    echo "⚠️ WARP daemon 启动失败"
+    cat /var/log/warp-svc.log
+fi
+
 # 配置 WARP
 echo ""
-echo "[3/5] 配置 WARP..."
+echo "[4/6] 配置 WARP..."
 
-# 停止现有服务
-systemctl stop warp-svc 2>/dev/null || true
-pkill -9 warp-svc 2>/dev/null || true
-
-# 创建配置目录
+# 设置 MDM 配置
 mkdir -p /var/lib/cloudflare-warp
-
-# 设置 MDM 配置（包含团队信息）
 cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <dict>
@@ -56,9 +66,9 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 </dict>
 EOF
 
-# 注册并连接
+# 注册（新版本用 registration）
 echo "注册 WARP..."
-warp-cli register --accept-tos || true
+warp-cli registration create --device="${CF_ID}" --token="${CF_TOKEN}" || true
 
 echo "连接 WARP..."
 warp-cli connect || true
@@ -80,7 +90,7 @@ curl -s -6 ifconfig.me || echo "无"
 
 # 下载 frpc 配置
 echo ""
-echo "[4/5] 下载 frpc 配置..."
+echo "[5/6] 下载 frpc 配置..."
 mkdir -p /etc/frp
 
 if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
@@ -95,7 +105,7 @@ fi
 
 # 启动 frpc
 echo ""
-echo "[5/5] 启动 frpc..."
+echo "[6/6] 启动 frpc..."
 
 if [ -f /etc/frp/frpc.toml ]; then
     frpc -c /etc/frp/frpc.toml

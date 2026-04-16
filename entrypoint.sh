@@ -1,165 +1,94 @@
-#!/bin/sh
-# entrypoint.sh
+#!/bin/bash
+set -euo pipefail
 
-set -e # Exit immediately if a command exits with a non-zero status.
-       # 如果任何命令失败，立即退出。
+WG_CONF="/etc/wireguard/wgcf-profile.conf"
+FRPC_CONF="/etc/frp/frpc.toml"
 
-# --- frpc.ini File Download Configuration ---
-# --- frpc.ini 文件下载配置 ---
+echo "=============================="
+echo "  WARP + frpc 容器启动"
+echo "=============================="
 
-# 1. Hardcoded base URL for the INI files in the GitHub repository.
-#    Ensure this URL ends with a slash (/).
-#    硬编码的 GitHub 仓库中存放 INI 文件的原始基础 URL。
-#    确保末尾有斜杠 /。
-FIXED_GITHUB_REPO_RAW_BASE_URL="https://raw.githubusercontent.com/chuwoo/tvbox/refs/heads/main/conf/"
-# 2. Path to the default INI file pre-included in the image.
-#    镜像内预置的默认 INI 文件的路径。
-DEFAULT_CONFIG_SOURCE_PATH="/etc/default.frpc.ini"
-
-# 3. Name of the INI file to download from GitHub.
-#    This MUST be specified via the GITHUB_INI_FILENAME environment variable.
-#    要从 GitHub 下载的 INI 文件的名称。
-#    必须通过环境变量 GITHUB_INI_FILENAME 指定。
-if [ -z "${FRP_CONF}" ]; then
-  echo "信息：环境变量 GITHUB_INI_FILENAME 未设置。"
-  # If GITHUB_INI_FILENAME is not set, we will proceed to use the default config directly.
-  # 如果 GITHUB_INI_FILENAME 未设置，我们将直接尝试使用默认配置。
-  REMOTE_INI_SOURCE_URL="" # Mark that no download will be attempted
-else
-  # Construct the full remote INI file URL
-  # 组合成完整的远程 INI 文件 URL
-  REMOTE_INI_SOURCE_URL="${FIXED_GITHUB_REPO_RAW_BASE_URL}${FRP_CONF}"
+# ---- 检查配置 ----
+if [ ! -f "$WG_CONF" ]; then
+    echo "❌ 缺少 $WG_CONF"
+    echo "   请先用 wgcf 生成并挂载到容器"
+    exit 1
+fi
+if [ ! -f "$FRPC_CONF" ]; then
+    echo "❌ 缺少 $FRPC_CONF"
+    exit 1
 fi
 
+# ---- 解析 wgcf 配置 ----
+echo "[1/5] 解析 WireGuard 配置..."
+PRIVATE_KEY=$(grep '^PrivateKey' "$WG_CONF" | awk -F'= ' '{print $2}')
+PEER_PUBLIC_KEY=$(grep '^PublicKey' "$WG_CONF" | awk -F'= ' '{print $2}')
+ENDPOINT=$(grep '^Endpoint' "$WG_CONF" | awk -F'= ' '{print $2}')
+WG_IPV4=$(grep '^Address' "$WG_CONF" | sed 's/.*= //' | sed 's/,.*//' | tr -d ' ')
+WG_IPV6=$(grep '^Address' "$WG_CONF" | sed 's/.*= //' | sed 's/.*,\s*//' | tr -d ' ')
 
-# --- Target path for frpc.ini inside the container ---
-# --- frpc.ini 在容器内的目标路径 ---
-TARGET_CONFIG_FINAL_PATH=""
+echo "   IPv4: $WG_IPV4"
+echo "   IPv6: $WG_IPV6"
+echo "   Endpoint: $ENDPOINT"
 
-# Iterate through the arguments passed to the script ($@) to find the -c option and its value.
-# 迭代处理传递给脚本的参数 ($@)，以找到 -c 选项及其值。
-count=0
-while [ "$count" -lt "$#" ]; do
-  count=$((count + 1))
-  eval "current_arg=\${$count}" # Get current argument / 获取当前参数
+# ---- 启动 BoringTun ----
+echo "[2/5] 启动 BoringTun..."
+boringtun-cli --disable-drop-privileges --log-level=info wg0
 
-  if [ "${current_arg}" = "-c" ]; then
-    if [ "$count" -lt "$#" ]; then # Check if there's an argument after -c / 检查 -c 后面是否还有参数
-      next_arg_index=$((count + 1))
-      eval "TARGET_CONFIG_FINAL_PATH=\${$next_arg_index}" # Get the path argument after -c / 获取 -c 后面的路径参数
-    fi
-    break # Found -c, exit loop / 找到 -c，跳出循环
-  fi
-done
+# ---- 配置 wg0 接口 ----
+echo "[3/5] 配置 wg0..."
+wg set wg0 \
+    private-key <(echo "$PRIVATE_KEY") \
+    peer "$PEER_PUBLIC_KEY" \
+    endpoint "$ENDPOINT" \
+    allowed-ips "0.0.0.0/0, ::/0" \
+    persistent-keepalive 25
 
-# If the target config path could not be parsed from arguments
-# 如果未能从参数中解析出目标配置文件路径
-if [ -z "${TARGET_CONFIG_FINAL_PATH}" ]; then
-  echo "错误：未能在启动参数中找到 -c <路径> 来确定配置文件的目标路径。"
-  echo "Dockerfile 的 CMD 指令应类似：CMD [\"-c\", \"/var/fsr/frpc.ini\"]"
-  echo "当前接收到的参数为: $@"
-  exit 1
-fi
+ip addr add "$WG_IPV4/32" dev wg0 2>/dev/null || true
+ip addr add "${WG_IPV6}/128" dev wg0 2>/dev/null || true
+ip link set mtu 1280 dev wg0
+ip link set wg0 up
 
-# Create the target directory if it doesn't exist
-# 创建目标目录 (如果不存在)
-TARGET_CONFIG_DIR=$(dirname "${TARGET_CONFIG_FINAL_PATH}")
-mkdir -p "${TARGET_CONFIG_DIR}"
+echo "   wg0 状态:"
+wg show wg0 | head -3
 
+# ---- 策略路由: frpc 流量走 WARP ----
+echo "[4/5] 配置策略路由..."
 
-# Attempt to download the configuration file if GITHUB_INI_FILENAME was provided
-# 如果提供了 GITHUB_INI_FILENAME，则尝试下载配置文件
-download_successful=false
-if [ -n "${REMOTE_INI_SOURCE_URL}" ]; then
-  echo "尝试从 GitHub 路径 ${FIXED_GITHUB_REPO_RAW_BASE_URL} 下载配置文件: ${GITHUB_INI_FILENAME}"
-  echo "完整的下载 URL 为: ${REMOTE_INI_SOURCE_URL}"
-  echo "下载后将在容器内保存为: ${TARGET_CONFIG_FINAL_PATH}"
+grep -q '^200 warp' /etc/iproute2/rt_tables 2>/dev/null || echo "200 warp" >> /etc/iproute2/rt_tables
 
-  if wget -S -q -O "${TARGET_CONFIG_FINAL_PATH}" "${REMOTE_INI_SOURCE_URL}"; then
-    echo "成功下载 ${GITHUB_INI_FILENAME} 并另存为 ${TARGET_CONFIG_FINAL_PATH}"
-    chmod 644 "${TARGET_CONFIG_FINAL_PATH}" # Set appropriate permissions / 设置适当的权限
-    download_successful=true
-  else
-    echo "警告：从 ${REMOTE_INI_SOURCE_URL} 下载 ${GITHUB_INI_FILENAME} 失败。"
-    # download_successful remains false
-  fi
-else
-  echo "信息：未指定 GITHUB_INI_FILENAME，将跳过下载步骤。"
-  # download_successful remains false, we need to use default or pre-existing.
-fi
+# WARP 默认路由（走 warp 路由表，不改主表）
+ip route add default dev wg0 table warp 2>/dev/null || true
+ip -6 route add default dev wg0 table warp 2>/dev/null || true
 
+# 打标记的包走 warp 表
+ip rule add fwmark 0x1 table warp priority 100 2>/dev/null || true
+ip -6 rule add fwmark 0x1 table warp priority 100 2>/dev/null || true
 
-# If download was not successful, try to use the default config or an existing one.
-# 如果下载不成功，则尝试使用默认配置或已存在的配置。
-if [ "${download_successful}" = "false" ]; then
-  echo "下载未成功或未尝试下载。"
-  # Check if the target file already exists (e.g., from a volume mount or previous successful run before restart)
-  # 检查目标文件是否已存在（例如，通过卷挂载或在重启前上次成功运行后留下的文件）
-  if [ -f "${TARGET_CONFIG_FINAL_PATH}" ] && [ -n "${REMOTE_INI_SOURCE_URL}" ]; then
-    # This case means: download was attempted for a specific file, it failed, but a file already exists at target.
-    # We prioritize the default config over a potentially stale/incorrect pre-existing file if download fails.
-    # So, we'll proceed to check for default. If user explicitly wants to use a volume-mounted file
-    # even on download failure, they should not set GITHUB_INI_FILENAME.
-    echo "警告：下载 ${GITHUB_INI_FILENAME} 失败，但目标路径 ${TARGET_CONFIG_FINAL_PATH} 已存在文件。"
-    echo "将优先尝试使用镜像内预置的默认配置文件（如果下载指定文件失败）。"
-  elif [ -f "${TARGET_CONFIG_FINAL_PATH}" ] && [ -z "${REMOTE_INI_SOURCE_URL}" ]; then
-    # This case means: GITHUB_INI_FILENAME was NOT set, so no download was attempted.
-    # A file exists at the target path, likely from a volume or a previous run.
-    # We should use this existing file.
-    echo "信息：未指定 GITHUB_INI_FILENAME 进行下载，且目标路径 ${TARGET_CONFIG_FINAL_PATH} 已存在文件。将使用此现有文件。"
-    # frpc will use this existing TARGET_CONFIG_FINAL_PATH
-  fi
+# WARP 源地址的回包也走 warp 表
+ip rule add from "$WG_IPV4" table warp priority 100 2>/dev/null || true
+ip -6 rule add from "$WG_IPV6" table warp priority 100 2>/dev/null || true
 
-  # If download failed OR no download was attempted AND the target file isn't already what we want,
-  # try to use the default configuration.
-  # This condition means:
-  # 1. Download was attempted and failed (download_successful=false, REMOTE_INI_SOURCE_URL is not empty)
-  # OR
-  # 2. No download was attempted (REMOTE_INI_SOURCE_URL is empty) AND target file doesn't exist (covered by next check)
-  # We need to ensure that if GITHUB_INI_FILENAME was not set, and a file exists at TARGET_CONFIG_FINAL_PATH, we don't overwrite it with default.
-  # The logic is: if download was specified and failed, use default. If no download specified, use existing or default if no existing.
+# 所有出站 TCP/UDP 打标记 → 走 WARP
+iptables  -t mangle -A OUTPUT -p tcp -j MARK --set-mark 0x1
+iptables  -t mangle -A OUTPUT -p udp -j MARK --set-mark 0x1
+ip6tables -t mangle -A OUTPUT -p tcp -j MARK --set-mark 0x1
+ip6tables -t mangle -A OUTPUT -p udp -j MARK --set-mark 0x1
 
-  should_use_default=false
-  if [ -n "${REMOTE_INI_SOURCE_URL}" ] && [ "${download_successful}" = "false" ]; then
-    # Download was specified and failed
-    should_use_default=true
-    #echo "由于远程文件下载失败，将尝试使用默认配置文件。"
-  elif [ -z "${REMOTE_INI_SOURCE_URL}" ] && [ ! -f "${TARGET_CONFIG_FINAL_PATH}" ]; then
-    # No download specified, and no file exists at target path
-    should_use_default=true
-    #echo "未指定远程文件下载，且目标路径不存在配置文件，将尝试使用默认配置文件。"
-  fi
+# BoringTun 自身的流量不打标记（防环路）
+iptables  -t mangle -I OUTPUT -o wg0 -j MARK --set-mark 0x0
+ip6tables -t mangle -I OUTPUT -o wg0 -j MARK --set-mark 0x0
 
-  if [ "${should_use_default}" = "true" ]; then
-    if [ -f "${DEFAULT_CONFIG_SOURCE_PATH}" ]; then
-      #echo "正在从 ${DEFAULT_CONFIG_SOURCE_PATH} 复制默认配置文件到 ${TARGET_CONFIG_FINAL_PATH}"
-      if cp "${DEFAULT_CONFIG_SOURCE_PATH}" "${TARGET_CONFIG_FINAL_PATH}"; then
-        #echo "已成功将默认配置文件复制到 ${TARGET_CONFIG_FINAL_PATH}"
-        chmod 644 "${TARGET_CONFIG_FINAL_PATH}"
-      else
-        #echo "错误：复制默认配置文件从 ${DEFAULT_CONFIG_SOURCE_PATH} 到 ${TARGET_CONFIG_FINAL_PATH} 失败。"
-        #echo "请检查路径和权限。正在退出。"
-        exit 1
-      fi
-    else
-      # This case should ideally not happen if Dockerfile is correct and default.frpc.ini was included
-      echo "严重错误：尝试使用默认配置失败，镜像内预置的默认配置文件 ${DEFAULT_CONFIG_SOURCE_PATH} 未找到！"
-      echo "请检查 Dockerfile 配置。正在退出。"
-      exit 1
-    fi
-  elif [ "${download_successful}" = "false" ] && [ ! -f "${TARGET_CONFIG_FINAL_PATH}" ]; then
-    # All attempts failed: download failed (or not specified) AND no default found AND no target file exists
-     echo "严重错误：配置文件处理失败。无法下载，也找不到默认配置，目标路径 ${TARGET_CONFIG_FINAL_PATH} 也不存在文件。"
-     exit 1
-  fi
-fi
+echo "   ✅ 策略路由就绪"
 
+# ---- 验证 IPv6 ----
+echo "[5/5] 验证网络..."
+ping6 -c1 -W3 2606:4700:4700::1111 >/dev/null 2>&1 \
+    && echo "   ✅ IPv6 可达" \
+    || echo "   ⚠️ IPv6 暂不可达（隧道建立中）"
 
-if [ ! -f "${TARGET_CONFIG_FINAL_PATH}" ]; then
-  echo "最终错误：配置文件 ${TARGET_CONFIG_FINAL_PATH} 未找到。frpc 无法启动。"
-  exit 1
-fi
-
-#echo "frpc 将使用配置文件: ${TARGET_CONFIG_FINAL_PATH}"
-#echo "正在使用参数 $@ 启动 frpc..."
-exec ./frpc "$@"
+echo ""
+echo "=============================="
+echo "  启动 frpc"
+echo "=============================="
+exec frpc -c "$FRPC_CONF"

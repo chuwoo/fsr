@@ -59,9 +59,13 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 </dict>
 EOF
 
-# 连接（加上 --accept-tos）
+# 接受条款（全局参数）
+echo "接受服务条款..."
+warp-cli --accept-tos registration create || true
+
+# 连接
 echo "连接 WARP..."
-warp-cli connect --accept-tos || true
+warp-cli connect || true
 
 sleep 10
 

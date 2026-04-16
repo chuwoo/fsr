@@ -26,7 +26,7 @@ RUN apk add --no-cache \
 COPY --from=builder /usr/local/cargo/bin/boringtun-cli /usr/local/bin/boringtun-cli
 
 # 安装 frpc（下载预编译二进制）
-ARG FRP_VERSION=0.61.1
+ARG FRP_VERSION=0.68.1
 RUN ARCH=$(uname -m) && \
     case "$ARCH" in \
         x86_64)  FARCH="amd64" ;; \

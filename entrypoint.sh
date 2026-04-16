@@ -1,54 +1,123 @@
-FRPC_CONF="/etc/frp/frpc.toml"
+#!/bin/bash
 
-echo "=============================="
-echo "  WARP + frpc 容器启动"
-echo "=============================="
+set -e
 
-# ---- 检查环境变量 ----
-for VAR in CF_ID CF_TOKEN FRP_CON FRP_REPO; do
-    [ -z "${!VAR:-}" ] && echo "❌ 缺少环境变量: $VAR" && exit 1
-done
+echo "=========================================="
+echo "  Cloudflare Tunnel + frpc 启动脚本"
+echo "=========================================="
 
-# ---- 启动 warp-svc ----
-echo "[1] 启动 warp-svc..."
-warp-svc &
-sleep 3
+# ============================================
+# 1. 检查环境变量
+# ============================================
+echo ""
+echo "[1/5] 检查环境变量..."
 
-# ---- 查看版本和帮助 ----
-echo "[2] warp-cli 版本:"
-warp-cli --version 2>&1 || true
-echo "[2] warp-cli 命令列表:"
-warp-cli --help 2>&1 || true
+if [ -z "$CF_ID" ]; then
+    echo "❌ 错误：CF_ID (Tunnel ID) 未设置"
+    exit 1
+fi
 
-# ---- 注册 ----
-echo "[3] 注册 WARP..."
-warp-cli --accept-tos registration new 2>&1
-echo "   注册结果: $?"
+if [ -z "$CF_TOKEN" ]; then
+    echo "❌ 错误：CF_TOKEN (Tunnel Token) 未设置"
+    exit 1
+fi
 
+echo "✅ CF_ID: ${CF_ID}"
+echo "✅ CF_TOKEN: 已设置"
+
+# ============================================
+# 2. 启动 Cloudflare Tunnel
+# ============================================
+echo ""
+echo "[2/5] 启动 Cloudflare Tunnel..."
+
+# 清理旧的 tunnel 进程
+pkill -f cloudflared 2>/dev/null || true
 sleep 1
 
-# ---- 状态 ----
-echo "[4] WARP 状态:"
-warp-cli status 2>&1 || true
+# 后台启动 cloudflared tunnel
+cloudflared tunnel run --id "${CF_ID}" --token "${CF_TOKEN}" &
+CLOUDFLARED_PID=$!
 
-# ---- 设置模式（尝试所有可能的命令）----
-echo "[5] 设置代理模式..."
-warp-cli mode proxy 2>&1 && echo "   mode proxy OK" || echo "   mode proxy 失败"
-warp-cli proxy port 40000 2>&1 && echo "   proxy port OK" || echo "   proxy port 失败"
+echo "✅ Cloudflare Tunnel 已启动 (PID: $CLOUDFLARED_PID)"
 
-# ---- 连接 ----
-echo "[6] 连接 WARP..."
-warp-cli connect 2>&1 || true
+# 等待 tunnel 建立
+sleep 10
 
-sleep 5
-echo "[7] 连接后状态:"
-warp-cli status 2>&1 || true
+# 检查 tunnel 状态
+if ps -p $CLOUDFLARED_PID > /dev/null 2>&1; then
+    echo "✅ Tunnel 运行正常"
+else
+    echo "❌ Tunnel 启动失败"
+    exit 1
+fi
 
-echo "[8] IPv6 检测:"
-curl -6 -s --max-time 10 https://api64.ipify.org 2>/dev/null || echo "不可达"
-
+# ============================================
+# 3. 下载 frpc 配置文件
+# ============================================
 echo ""
-echo "=============================="
-echo "  诊断完成，容器保持运行"
-echo "=============================="
-sleep 3600
+echo "[3/5] 下载 frpc 配置文件..."
+
+mkdir -p /etc/frp
+
+if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
+    FRPC_URL="${FRP_REPO}${FRP_CON}"
+    echo "📥 下载地址: ${FRPC_URL}"
+    
+    curl -fsSL "${FRPC_URL}" -o /etc/frp/frpc.toml
+    
+    if [ -f /etc/frp/frpc.toml ]; then
+        echo "✅ 配置文件已保存到 /etc/frp/frpc.toml"
+    else
+        echo "❌ 配置文件下载失败"
+        exit 1
+    fi
+else
+    echo "⚠️ 警告：FRP_REPO 或 FRP_CON 未设置，跳过下载"
+fi
+
+# 显示配置文件内容（调试用）
+echo ""
+echo "frpc 配置文件内容："
+cat /etc/frp/frpc.toml 2>/dev/null || echo "（配置文件不存在）"
+
+# ============================================
+# 4. 启动 frpc
+# ============================================
+echo ""
+echo "[4/5] 启动 frpc..."
+
+frpc -c /etc/frp/frpc.toml &
+FRPC_PID=$!
+
+echo "✅ frpc 已启动 (PID: $FRPC_PID)"
+
+# ============================================
+# 5. 监控进程
+# ============================================
+echo ""
+echo "[5/5] 进入监控模式..."
+
+# trap 信号处理，确保退出时清理进程
+trap 'kill $CLOUDFLARED_PID $FRPC_PID 2>/dev/null; exit' SIGTERM SIGINT
+
+# 监控进程状态
+while true; do
+    sleep 30
+    
+    # 检查 frpc
+    if ! ps -p $FRPC_PID > /dev/null 2>&1; then
+        echo "⚠️ frpc 进程已退出，尝试重启..."
+        frpc -c /etc/frp/frpc.toml &
+        FRPC_PID=$!
+    fi
+    
+    # 检查 cloudflared
+    if ! ps -p $CLOUDFLARED_PID > /dev/null 2>&1; then
+        echo "⚠️ Cloudflare Tunnel 已退出，尝试重启..."
+        cloudflared tunnel run --id "${CF_ID}" --token "${CF_TOKEN}" &
+        CLOUDFLARED_PID=$!
+    fi
+    
+    echo "✅ $(date '+%Y-%m-%d %H:%M:%S') - frpc: 运行中, tunnel: 运行中"
+done

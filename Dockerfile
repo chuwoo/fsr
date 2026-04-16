@@ -2,8 +2,8 @@ FROM debian:12-slim
 
 ARG FRP_VERSION=0.68.1
 
-ENV CF_ID=""                        # Service Token Client ID
-ENV CF_TOKEN=""                     # Service Token Client Secret
+ENV CF_ID=""                        
+ENV CF_TOKEN=""                     
 ENV FRP_CON=""
 ENV FRP_REPO=""
 

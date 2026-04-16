@@ -36,21 +36,18 @@ sleep 2
 echo ""
 echo "[3/6] 启动 WARP daemon..."
 
-# 后台启动 warp-svc
 nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
 sleep 5
 
-# 检查 daemon 状态
-if pgrep -x warp-svc > /dev/null; then
-    echo "✅ WARP daemon 已启动"
-else
-    echo "⚠️ WARP daemon 启动失败"
-    cat /var/log/warp-svc.log
-fi
+echo "✅ WARP daemon 已启动"
 
 # 配置 WARP
 echo ""
 echo "[4/6] 配置 WARP..."
+
+# 接受服务条款
+echo "接受服务条款..."
+warp-cli --accept-tos
 
 # 设置 MDM 配置
 mkdir -p /var/lib/cloudflare-warp
@@ -66,10 +63,7 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 </dict>
 EOF
 
-# 注册（新版本用 registration）
-echo "注册 WARP..."
-warp-cli registration create --device="${CF_ID}" --token="${CF_TOKEN}" || true
-
+# 连接
 echo "连接 WARP..."
 warp-cli connect || true
 

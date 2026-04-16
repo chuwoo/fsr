@@ -59,9 +59,13 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 </dict>
 EOF
 
-# 接受条款并连接（--accept-tos 放在前面）
-echo "接受服务条款并连接 WARP..."
-warp-cli --accept-tos connect
+# 接受条款（尝试环境变量方式）
+export WARP_ACCEPT_TOS=true
+echo "WARP_ACCEPT_TOS=true"
+
+# 尝试用 script 模拟 TTY
+echo "连接 WARP..."
+script -q -c "warp-cli connect" /dev/null || warp-cli connect || true
 
 sleep 10
 

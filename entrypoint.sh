@@ -45,10 +45,6 @@ echo "✅ WARP daemon 已启动"
 echo ""
 echo "[4/6] 配置 WARP..."
 
-# 接受服务条款
-echo "接受服务条款..."
-warp-cli --accept-tos
-
 # 设置 MDM 配置
 mkdir -p /var/lib/cloudflare-warp
 cat > /var/lib/cloudflare-warp/mdm.xml << EOF
@@ -63,9 +59,9 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 </dict>
 EOF
 
-# 连接
+# 连接（加上 --accept-tos）
 echo "连接 WARP..."
-warp-cli connect || true
+warp-cli connect --accept-tos || true
 
 sleep 10
 

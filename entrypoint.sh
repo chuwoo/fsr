@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 echo "=========================================="
 echo "  WARP + frpc (vochat)"
@@ -8,11 +7,11 @@ echo "=========================================="
 # 环境变量检查
 if [ -z "$CF_ID" ] || [ -z "$CF_TOKEN" ]; then
     echo "❌ 请设置 CF_ID 和 CF_TOKEN"
-    exit 1
+    echo "容器保持运行，可以 exec 进来调试"
+    tail -f /dev/null
 fi
 
 echo "✅ 团队: ${CF_TEAM}"
-
 
 # 清理旧进程
 echo "[1/3] 清理旧进程..."
@@ -38,56 +37,65 @@ EOF
 # 启动 warp-svc
 echo "[3/3] 启动 WARP..."
 nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
-sleep 3
+sleep 5
 
-# 注册设备（关键步骤！只在第一次或 reg.json 不存在时执行）
+# 注册
 if [ ! -f /var/lib/cloudflare-warp/reg.json ]; then
-    echo "正在注册设备到 Cloudflare Teams..."
+    echo "正在注册设备..."
     warp-cli register || true
+    sleep 2
 fi
 
-# 设置模式并连接（使用 script 模拟 tty，解决非交互环境提示问题）
-warp-cli mode warp || true
+# 尝试 proxy 模式
+echo ""
+echo "=== 尝试 proxy 模式 ==="
+warp-cli mode proxy || true
+warp-cli disconnect 2>/dev/null || true
+sleep 2
+yes | script -q -c "warp-cli connect" /dev/null || true
+sleep 10
+
+echo ""
+echo "proxy 模式状态："
+warp-cli status
+echo -n "IPv4: "; curl -s -4 ifconfig.me || echo "失败"
+echo ""
+echo -n "IPv6: "; curl -s -6 ifconfig.me || echo "无"
 warp-cli disconnect 2>/dev/null || true
 sleep 2
 
-echo "正在连接 WARP..."
+# 尝试 warp 全隧道模式
+echo ""
+echo "=== 尝试 warp 全隧道模式 ==="
+warp-cli mode warp || true
+sleep 2
 yes | script -q -c "warp-cli connect" /dev/null || true
 
-# 等待 WARP 真正 Connected（最多等 30 秒）
-echo "等待 WARP 连接成功..."
+echo "等待连接（最多30秒）..."
 for i in {1..15}; do
-    STATUS=$(warp-cli status 2>/dev/null | grep -oP 'Status: \K\w+' || echo "Disconnected")
+    STATUS=$(warp-cli status 2>/dev/null | grep -oP 'Status: \K\w+' || echo "Unknown")
+    echo "  第${i}次: $STATUS"
     if [ "$STATUS" = "Connected" ]; then
-        echo "✅ WARP 已连接"
+        echo "✅ WARP 全隧道已连接"
         break
     fi
     sleep 2
 done
 
-if [ "$STATUS" != "Connected" ]; then
-    echo "⚠️ WARP 连接超时，请检查日志 /var/log/warp-svc.log"
-fi
-
-# 显示出口 IP（验证是否走 WARP）
-echo "出口 IP："
+echo ""
+echo "warp 全隧道模式状态："
+warp-cli status
 echo -n "IPv4: "; curl -s -4 ifconfig.me || echo "失败"
 echo ""
-echo -n "IPv6: "; curl -s -6 ifconfig.me || echo "无 IPv6"
+echo -n "IPv6: "; curl -s -6 ifconfig.me || echo "无"
+echo ""
+echo "网卡信息："
+ip addr show 2>/dev/null || ifconfig
+echo ""
+echo "IPv6 路由："
+ip -6 route show 2>/dev/null || echo "无"
+echo ""
+echo "=== 全部完成，容器保持运行 ==="
+echo "可以 docker exec -it 进来查看"
 
-# 下载 frpc 配置（如果提供了 FRP_REPO + FRP_CON）
-mkdir -p /etc/frp
-if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
-    echo "正在下载 frpc 配置: ${FRP_REPO}${FRP_CON}"
-    curl -fsSL "${FRP_REPO}${FRP_CON}" -o /etc/frp/frpc.toml || echo "⚠️ 配置下载失败"
-fi
-
-if [ -f /etc/frp/frpc.toml ]; then
-    echo "✅ 使用配置文件 /etc/frp/frpc.toml"
-    cat /etc/frp/frpc.toml
-    echo "启动 frpc..."
-    exec frpc -c /etc/frp/frpc.toml   # 用 exec 替换进程，优雅退出
-else
-    echo "❌ 未找到 frpc.toml，容器将保持运行（便于调试）"
-    tail -f /dev/null
-fi
+tail -f /dev/null

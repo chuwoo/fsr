@@ -8,7 +8,7 @@ ENV FRP_CON=""
 ENV FRP_REPO=""
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates bash jq gnupg socat \
+    curl ca-certificates bash gnupg socat proxychains-ng \
     && curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg \
     | gpg --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] \

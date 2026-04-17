@@ -3,7 +3,7 @@
 set -e
 
 CF_TEAM="vochat.teams.cloudflare.com"
-FRP_SERVER="home.getput.cloudns.org"
+FRP_SERVER="home.getput.cn"
 
 echo "=========================================="
 echo "  WARP + frpc (vochat)"
@@ -74,8 +74,14 @@ echo -n "IPv6: "
 curl -s -6 ifconfig.me || echo "无"
 
 echo ""
-echo "[5/5] 启动 frpc..."
+echo "[5/5] 配置 proxychains 并启动 frpc..."
 mkdir -p /etc/frp
+
+cat > /etc/proxychains.conf << 'EOF'
+strict_chain
+[ProxyList]
+socks5 127.0.0.1 40000
+EOF
 
 if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
     curl -fsSL "${FRP_REPO}${FRP_CON}" -o /etc/frp/frpc.toml
@@ -87,8 +93,7 @@ if [ -f /etc/frp/frpc.toml ]; then
     echo "frpc 配置："
     cat /etc/frp/frpc.toml
 
-    export ALL_PROXY=socks5://127.0.0.1:40000
-    frpc -c /etc/frp/frpc.toml
+    proxychains4 frpc -c /etc/frp/frpc.toml
 else
     echo "❌ 配置文件下载失败"
     tail -f /dev/null

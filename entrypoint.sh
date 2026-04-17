@@ -3,14 +3,14 @@
 set -e
 
 CF_TEAM="vochat.teams.cloudflare.com"
-FRP_SERVER="home.getput.cloudns.org"
+FRP_SERVER="home.getput.cn"
 
 echo "=========================================="
-echo "  WARP + socat + frpc (vochat)"
+echo "  WARP + frpc (vochat)"
 echo "=========================================="
 
 echo ""
-echo "[1/7] 检查环境变量..."
+echo "[1/6] 检查环境变量..."
 
 if [ -z "$CF_ID" ]; then
     echo "❌ 请设置 CF_ID"
@@ -26,14 +26,13 @@ echo "✅ 团队: ${CF_TEAM}"
 echo "✅ FRP 服务器: ${FRP_SERVER}"
 
 echo ""
-echo "[2/7] 清理旧进程..."
+echo "[2/6] 清理旧进程..."
 pkill -f warp 2>/dev/null || true
 pkill -f frpc 2>/dev/null || true
-pkill -f socat 2>/dev/null || true
 sleep 2
 
 echo ""
-echo "[3/7] 配置 WARP..."
+echo "[3/6] 配置 WARP..."
 
 mkdir -p /var/lib/cloudflare-warp
 cat > /var/lib/cloudflare-warp/mdm.xml << EOF
@@ -49,7 +48,7 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 EOF
 
 echo ""
-echo "[4/7] 启动 WARP daemon..."
+echo "[4/6] 启动 WARP daemon..."
 
 nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
 sleep 5
@@ -57,7 +56,7 @@ sleep 5
 echo "✅ WARP daemon 已启动"
 
 echo ""
-echo "[5/7] 接受服务条款并连接 WARP..."
+echo "[5/6] 接受服务条款并连接 WARP..."
 
 warp-cli mode proxy || true
 sleep 2
@@ -80,24 +79,7 @@ echo -n "IPv6: "
 curl -s -6 ifconfig.me || echo "无"
 
 echo ""
-echo "[6/7] 启动 socat 代理..."
-
-# socat 转发 TCP 连接到 WARP SOCKS5 代理
-nohup socat TCP-LISTEN:6500,fork SOCKS:127.0.0.1:${FRP_SERVER}:6500,socksport=1080 > /var/log/socat.log 2>&1 &
-SOCAT_PID=$!
-
-sleep 3
-
-if ps -p $SOCAT_PID > /dev/null 2>&1; then
-    echo "✅ socat 已启动 (PID: $SOCAT_PID)"
-    echo "✅ 转发: localhost:6500 -> ${FRP_SERVER}:6500 (via WARP SOCKS5)"
-else
-    echo "❌ socat 启动失败"
-    cat /var/log/socat.log
-fi
-
-echo ""
-echo "[7/7] 下载 frpc 配置并启动..."
+echo "[6/6] 下载 frpc 配置并启动..."
 mkdir -p /etc/frp
 
 if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
@@ -106,14 +88,11 @@ fi
 
 if [ -f /etc/frp/frpc.toml ]; then
     echo "✅ 配置文件已下载"
-    
-    # 修改 serverAddr 为本地
-    sed -i 's/serverAddr = "home.getput.cn"/serverAddr = "127.0.0.1"/' /etc/frp/frpc.toml
-    
+
     echo ""
     echo "frpc 配置："
     cat /etc/frp/frpc.toml
-    
+
     frpc -c /etc/frp/frpc.toml
 else
     echo "❌ 配置文件下载失败"

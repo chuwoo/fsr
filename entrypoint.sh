@@ -10,7 +10,7 @@ echo "=========================================="
 
 # 检查环境变量
 echo ""
-echo "[1/7] 检查环境变量..."
+echo "[1/6] 检查环境变量..."
 
 if [ -z "$CF_ID" ]; then
     echo "❌ 请设置 CF_ID"
@@ -23,20 +23,18 @@ if [ -z "$CF_TOKEN" ]; then
 fi
 
 echo "✅ 团队: ${CF_TEAM}"
-echo "✅ Client ID: ${CF_ID}"
 
 # 清理旧进程
 echo ""
-echo "[2/7] 清理旧进程..."
+echo "[2/6] 清理旧进程..."
 pkill -f warp 2>/dev/null || true
 pkill -f frpc 2>/dev/null || true
 sleep 2
 
 # 配置 WARP
 echo ""
-echo "[3/7] 配置 WARP..."
+echo "[3/6] 配置 WARP..."
 
-# 设置 MDM 配置
 mkdir -p /var/lib/cloudflare-warp
 cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -52,30 +50,21 @@ EOF
 
 # 启动 WARP daemon
 echo ""
-echo "[4/7] 启动 WARP daemon..."
+echo "[4/6] 启动 WARP daemon..."
 
 nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
 sleep 5
 
 echo "✅ WARP daemon 已启动"
 
-# 先接受条款（先执行一次）
+# 接受条款并连接
 echo ""
-echo "[5/7] 接受服务条款..."
-yes | script -q -c "warp-cli connect" /dev/null || true
-
-# 设置为 proxy 模式
-echo ""
-echo "[6/7] 设置 WARP 为 Proxy 模式..."
+echo "[5/6] 接受服务条款并连接 WARP..."
 
 warp-cli mode proxy || true
-sleep 3
-
-# 断开重连
+sleep 2
 warp-cli disconnect || true
 sleep 2
-
-# 重新连接
 yes | script -q -c "warp-cli connect" /dev/null || true
 
 sleep 10
@@ -93,9 +82,9 @@ echo ""
 echo -n "IPv6: "
 curl -s -6 ifconfig.me || echo "无"
 
-# 下载并修改 frpc 配置
+# 下载 frpc 配置
 echo ""
-echo "[7/7] 下载 frpc 配置并启动..."
+echo "[6/6] 下载 frpc 配置并启动..."
 mkdir -p /etc/frp
 
 if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
@@ -104,21 +93,10 @@ fi
 
 if [ -f /etc/frp/frpc.toml ]; then
     echo "✅ 配置文件已下载"
-    
-    # 添加 SOCKS5 代理配置
-    if ! grep -q "socks5_proxy_url" /etc/frp/frpc.toml; then
-        echo "" >> /etc/frp/frpc.toml
-        echo "# WARP SOCKS5 Proxy" >> /etc/frp/frpc.toml
-        echo "socks5_proxy_url = 127.0.0.1:1080" >> /etc/frp/frpc.toml
-        echo "✅ 已添加 SOCKS5 代理配置"
-    fi
-    
     echo ""
-    echo "frpc 配置："
     cat /etc/frp/frpc.toml
-    
     frpc -c /etc/frp/frpc.toml
 else
-    echo "⚠️ 无配置文件，保持运行"
+    echo "❌ 配置文件下载失败"
     tail -f /dev/null
 fi

@@ -3,10 +3,10 @@
 set -e
 
 CF_TEAM="vochat.teams.cloudflare.com"
-FRP_SERVER="home.getput.cn"
+FRP_SERVER="home.getput.cloudns.org"
 
 echo "=========================================="
-echo "  WARP + gost + frpc (vochat)"
+echo "  WARP + socat + frpc (vochat)"
 echo "=========================================="
 
 echo ""
@@ -29,7 +29,7 @@ echo ""
 echo "[2/7] 清理旧进程..."
 pkill -f warp 2>/dev/null || true
 pkill -f frpc 2>/dev/null || true
-pkill -f gost 2>/dev/null || true
+pkill -f socat 2>/dev/null || true
 sleep 2
 
 echo ""
@@ -80,20 +80,20 @@ echo -n "IPv6: "
 curl -s -6 ifconfig.me || echo "无"
 
 echo ""
-echo "[6/7] 启动 gost 代理..."
+echo "[6/7] 启动 socat 代理..."
 
-# gost 监听 6500，通过 WARP SOCKS5 代理连接到 frps
-nohup gost -L "tcp://:6500/${FRP_SERVER}:6500" -F "socks5://127.0.0.1:1080" > /var/log/gost.log 2>&1 &
-GOST_PID=$!
+# socat 转发 TCP 连接到 WARP SOCKS5 代理
+nohup socat TCP-LISTEN:6500,fork SOCKS:127.0.0.1:${FRP_SERVER}:6500,socksport=1080 > /var/log/socat.log 2>&1 &
+SOCAT_PID=$!
 
 sleep 3
 
-if ps -p $GOST_PID > /dev/null 2>&1; then
-    echo "✅ gost 已启动 (PID: $GOST_PID)"
-    echo "✅ 转发: localhost:6500 -> ${FRP_SERVER}:6500 -> WARP SOCKS5"
+if ps -p $SOCAT_PID > /dev/null 2>&1; then
+    echo "✅ socat 已启动 (PID: $SOCAT_PID)"
+    echo "✅ 转发: localhost:6500 -> ${FRP_SERVER}:6500 (via WARP SOCKS5)"
 else
-    echo "❌ gost 启动失败"
-    cat /var/log/gost.log
+    echo "❌ socat 启动失败"
+    cat /var/log/socat.log
 fi
 
 echo ""
@@ -107,7 +107,7 @@ fi
 if [ -f /etc/frp/frpc.toml ]; then
     echo "✅ 配置文件已下载"
     
-    # 修改 serverAddr 为本地 gost
+    # 修改 serverAddr 为本地
     sed -i 's/serverAddr = "home.getput.cn"/serverAddr = "127.0.0.1"/' /etc/frp/frpc.toml
     
     echo ""

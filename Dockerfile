@@ -8,7 +8,7 @@ ENV FRP_CON=""
 ENV FRP_REPO=""
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates bash jq gnupg \
+    curl ca-certificates bash jq gnupg socat \
     && curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg \
     | gpg --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] \
@@ -19,9 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_${ARCH}.tar.gz" \
     | tar xz --strip-components=1 -C /usr/local/bin "frp_${FRP_VERSION}_linux_${ARCH}/frpc" \
     && chmod +x /usr/local/bin/frpc \
-    && curl -fsSL https://github.com/go-gost/gost/releases/latest/download/gost-linux-amd64-${ARCH}.gz \
-    | gunzip > /usr/local/bin/gost \
-    && chmod +x /usr/local/bin/gost \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /entrypoint.sh

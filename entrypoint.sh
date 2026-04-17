@@ -3,7 +3,7 @@
 set -e
 
 CF_TEAM="vochat.teams.cloudflare.com"
-FRP_SERVER="home.getput.cn"
+FRP_SERVER="home.getput.cloudns.org"
 
 echo "=========================================="
 echo "  WARP + frpc (vochat)"

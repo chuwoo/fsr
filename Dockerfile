@@ -2,8 +2,8 @@ FROM debian:12-slim
 
 ARG FRP_VERSION=0.68.1
 
-ENV CF_ID=""                        
-ENV CF_TOKEN=""                     
+ENV CF_ID=""
+ENV CF_TOKEN=""
 ENV FRP_CON=""
 ENV FRP_REPO=""
 
@@ -19,6 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_${ARCH}.tar.gz" \
     | tar xz --strip-components=1 -C /usr/local/bin "frp_${FRP_VERSION}_linux_${ARCH}/frpc" \
     && chmod +x /usr/local/bin/frpc \
+    && curl -fsSL https://github.com/go-gost/gost/releases/latest/download/gost-linux-amd64-${ARCH}.gz \
+    | gunzip > /usr/local/bin/gost \
+    && chmod +x /usr/local/bin/gost \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /entrypoint.sh

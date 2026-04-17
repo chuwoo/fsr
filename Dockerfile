@@ -2,10 +2,7 @@ FROM debian:12-slim
 
 ARG FRP_VERSION=0.68.1
 
-# 运行时必需的环境变量
-ENV CF_TEAM="vochat.teams.cloudflare.com"
-ENV CF_ID=""
-ENV CF_TOKEN=""
+ENV WARP_TOKEN=""
 ENV FRP_REPO=""
 ENV FRP_CON=""
 
@@ -26,7 +23,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# 建议挂载的目录（持久化注册信息 + 配置）
 VOLUME ["/var/lib/cloudflare-warp", "/etc/frp"]
 
 ENTRYPOINT ["/entrypoint.sh"]

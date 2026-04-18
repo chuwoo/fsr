@@ -5,16 +5,11 @@ echo "  WARP 调试脚本"
 echo "=========================================="
 
 # 环境变量
-if [ -z "$CF_ID" ]; then
-    echo "❌ CF_ID 未设置"
+if [ -z "$WARP_TOKEN" ]; then
+    echo "❌ WARP_TOKEN 未设置"
+    echo "请设置环境变量: export WARP_TOKEN='你的teams-enroll-token'"
 else
-    echo "✅ CF_ID: ${CF_ID}"
-fi
-
-if [ -z "$CF_TOKEN" ]; then
-    echo "❌ CF_TOKEN 未设置"
-else
-    echo "✅ CF_TOKEN: 已设置"
+    echo "✅ WARP_TOKEN: ${WARP_TOKEN:0:50}..."
 fi
 
 echo ""
@@ -28,7 +23,7 @@ echo "✅ 清理完成"
 
 echo ""
 echo "=========================================="
-echo "2. 配置 WARP MDM..."
+echo "2. 配置 WARP MDM (含 teams_enroll_token)..."
 echo "=========================================="
 mkdir -p /var/lib/cloudflare-warp
 
@@ -37,10 +32,8 @@ cat > /var/lib/cloudflare-warp/mdm.xml << EOF
 <dict>
     <key>organization</key>
     <string>vochat.teams.cloudflare.com</string>
-    <key>auth_client_id</key>
-    <string>${CF_ID}</string>
-    <key>auth_client_secret</key>
-    <string>${CF_TOKEN}</string>
+    <key>teams_enroll_token</key>
+    <string>${WARP_TOKEN}</string>
 </dict>
 EOF
 echo "✅ MDM 配置完成"
@@ -69,68 +62,41 @@ fi
 
 echo ""
 echo "=========================================="
-echo "5. 注册 WARP..."
+echo "5. 检查 warp-cli 版本和命令..."
 echo "=========================================="
-warp-cli register || true
-echo "✅ 注册命令已执行"
+warp-cli --version
+echo ""
+echo "warp-cli registration 子命令："
+warp-cli registration --help
 
 echo ""
 echo "=========================================="
-echo "6. 设置模式并连接..."
+echo "6. 尝试各种注册方式..."
 echo "=========================================="
-echo "设置 proxy 模式..."
-warp-cli mode proxy || echo "⚠️ mode proxy 失败"
-
-echo "断开旧连接..."
-warp-cli disconnect 2>/dev/null || true
-
-echo "连接 WARP..."
-yes | script -q -c "warp-cli connect" /dev/null || true
+echo "尝试: warp-cli registration new vochat.teams.cloudflare.com"
+warp-cli registration new vochat.teams.cloudflare.com || true
 
 echo ""
 echo "=========================================="
-echo "7. 等待并检查状态..."
+echo "7. 检查 WARP 状态..."
 echo "=========================================="
-for i in {1..10}; do
-    echo "尝试 $i/10..."
-    STATUS=$(warp-cli status 2>/dev/null | head -5)
-    echo "$STATUS"
-    echo ""
-    if echo "$STATUS" | grep -q "Connected"; then
-        echo "✅ WARP 已连接！"
-        break
-    fi
-    sleep 3
-done
+warp-cli status
 
 echo ""
 echo "=========================================="
-echo "8. 检查出口 IP..."
+echo "8. 检查 daemon 日志..."
+echo "=========================================="
+tail -50 /var/log/warp-svc.log 2>/dev/null
+
+echo ""
+echo "=========================================="
+echo "9. 检查出口 IP..."
 echo "=========================================="
 echo -n "IPv4: "
 curl -s -4 ifconfig.me || echo "获取失败"
 echo ""
 echo -n "IPv6: "
 curl -s -6 ifconfig.me || echo "获取失败"
-
-echo ""
-echo "=========================================="
-echo "9. 检查端口监听..."
-echo "=========================================="
-echo "TCP 端口:"
-ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || echo "无权限查看"
-
-echo ""
-echo "=========================================="
-echo "10. WARP daemon 日志..."
-echo "=========================================="
-tail -30 /var/log/warp-svc.log 2>/dev/null
-
-echo ""
-echo "=========================================="
-echo "11. WARP 详细状态..."
-echo "=========================================="
-warp-cli status
 
 echo ""
 echo "=========================================="

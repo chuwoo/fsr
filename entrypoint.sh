@@ -8,28 +8,40 @@ echo "=========================================="
 # 检查环境变量
 if [ -z "$WARP_TOKEN" ]; then
     echo "❌ 请设置 WARP_TOKEN"
-    exit 1
+    tail -f /dev/null
 fi
 
 echo "✅ WARP_TOKEN 已设置"
 
 # 清理旧进程
-echo "[1/4] 清理旧进程..."
+echo "[1/5] 清理旧进程..."
 pkill -f warp 2>/dev/null || true
 pkill -f frpc 2>/dev/null || true
 sleep 2
 
+# 配置 WARP MDM
+echo "[2/5] 配置 WARP MDM..."
+mkdir -p /var/lib/cloudflare-warp
+cat > /var/lib/cloudflare-warp/mdm.xml << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<dict>
+    <key>organization</key>
+    <string>vochat.teams.cloudflare.com</string>
+</dict>
+EOF
+
 # 启动 WARP
-echo "[2/4] 启动 WARP..."
+echo "[3/5] 启动 WARP daemon..."
 nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
 sleep 5
 
 # 注册 WARP
-echo "[3/4] 注册 WARP..."
+echo "[4/5] 注册 WARP..."
 rm -f /var/lib/cloudflare-warp/reg.json
 warp-cli --accept-tos teams-enroll-token "${WARP_TOKEN}"
 
 # 连接
+echo "连接 WARP..."
 warp-cli connect || true
 sleep 10
 
@@ -45,7 +57,7 @@ echo -n "IPv6: "; curl -s -6 ifconfig.me || echo "无"
 
 # 下载 frpc 配置
 echo ""
-echo "[4/4] 下载 frpc 配置..."
+echo "[5/5] 下载 frpc 配置..."
 mkdir -p /etc/frp
 if [ -n "$FRP_REPO" ] && [ -n "$FRP_CON" ]; then
     curl -fsSL "${FRP_REPO}${FRP_CON}" -o /etc/frp/frpc.toml

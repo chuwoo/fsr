@@ -1,107 +1,98 @@
 #!/bin/bash
+set -e
 
-echo "=========================================="
-echo "  WARP 调试脚本"
-echo "=========================================="
+echo "[warp-global] Starting Cloudflare WARP in global NAT mode..."
 
-# 环境变量
-if [ -z "$WARP_TOKEN" ]; then
-    echo "❌ WARP_TOKEN 未设置"
-    echo "请设置环境变量: export WARP_TOKEN='你的teams-enroll-token'"
-else
-    echo "✅ WARP_TOKEN: ${WARP_TOKEN:0:50}..."
+# ============================================================
+# 1. 创建 TUN 设备（WARP 虚拟网卡依赖）
+# ============================================================
+if [ ! -e /dev/net/tun ]; then
+    echo "[warp-global] Creating /dev/net/tun device..."
+    sudo mkdir -p /dev/net
+    sudo mknod /dev/net/tun c 10 200
+    sudo chmod 600 /dev/net/tun
 fi
 
-echo ""
-echo "=========================================="
-echo "1. 清理旧进程..."
-echo "=========================================="
-pkill -f warp 2>/dev/null || true
-pkill -f frpc 2>/dev/null || true
-sleep 2
-echo "✅ 清理完成"
+# ============================================================
+# 2. 启动 D-Bus（warp-svc 守护进程依赖）
+# ============================================================
+echo "[warp-global] Starting D-Bus daemon..."
+sudo mkdir -p /run/dbus
+if [ -f /run/dbus/pid ]; then
+    sudo rm /run/dbus/pid
+fi
+sudo dbus-daemon --config-file=/usr/share/dbus-1/system.conf
 
-echo ""
-echo "=========================================="
-echo "2. 配置 WARP MDM (含 teams_enroll_token)..."
-echo "=========================================="
-mkdir -p /var/lib/cloudflare-warp
+# ============================================================
+# 3. 启动 warp-svc 后台守护进程
+# ============================================================
+echo "[warp-global] Starting warp-svc daemon..."
+sudo warp-svc --accept-tos &
 
-cat > /var/lib/cloudflare-warp/mdm.xml << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<dict>
-    <key>organization</key>
-    <string>vochat.teams.cloudflare.com</string>
-    <key>teams_enroll_token</key>
-    <string>${WARP_TOKEN}</string>
-</dict>
-EOF
-echo "✅ MDM 配置完成"
+# 等待守护进程就绪
+sleep "$WARP_SLEEP"
 
-echo ""
-echo "=========================================="
-echo "3. 启动 warp-svc daemon..."
-echo "=========================================="
-nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
-WARP_PID=$!
-echo "✅ warp-svc 已启动 (PID: $WARP_PID)"
-
-sleep 5
-
-echo ""
-echo "=========================================="
-echo "4. 检查 daemon 状态..."
-echo "=========================================="
-if ps -p $WARP_PID > /dev/null 2>&1; then
-    echo "✅ warp-svc 进程运行中"
+# ============================================================
+# 4. 注册 WARP 客户端（仅首次）
+# ============================================================
+if [ ! -f /var/lib/cloudflare-warp/reg.json ]; then
+    if [ ! -f /var/lib/cloudflare-warp/mdm.xml ] || [ -n "$REGISTER_WHEN_MDM_EXISTS" ]; then
+        echo "[warp-global] Registering new WARP client..."
+        warp-cli registration new && echo "[warp-global] WARP client registered!"
+        if [ -n "$WARP_LICENSE_KEY" ]; then
+            echo "[warp-global] Registering WARP+ license..."
+            warp-cli registration license "$WARP_LICENSE_KEY" && echo "[warp-global] WARP+ license activated!"
+        fi
+    fi
 else
-    echo "❌ warp-svc 进程已退出"
-    echo "日志："
-    cat /var/log/warp-svc.log 2>/dev/null || echo "无日志"
+    echo "[warp-global] WARP client already registered, skipping registration."
 fi
 
-echo ""
-echo "=========================================="
-echo "5. 检查 warp-cli 版本和命令..."
-echo "=========================================="
-warp-cli --version
-echo ""
-echo "warp-cli registration 子命令："
-warp-cli registration --help
+# ============================================================
+# 5. 切换到 WARP 全局模式（创建 CloudflareWARP 虚拟网卡）
+# ============================================================
+echo "[warp-global] Switching to WARP mode (global)..."
+warp-cli --accept-tos mode warp
+warp-cli --accept-tos connect
 
-echo ""
-echo "=========================================="
-echo "6. 尝试各种注册方式..."
-echo "=========================================="
-echo "尝试: warp-cli registration new vochat.teams.cloudflare.com"
-warp-cli registration new vochat.teams.cloudflare.com || true
+# 等待虚拟网卡创建并配置完成
+sleep "$WARP_SLEEP"
 
-echo ""
-echo "=========================================="
-echo "7. 检查 WARP 状态..."
-echo "=========================================="
-warp-cli status
+# 禁用 qlog 减少日志噪音
+warp-cli --accept-tos debug qlog disable
 
-echo ""
-echo "=========================================="
-echo "8. 检查 daemon 日志..."
-echo "=========================================="
-tail -50 /var/log/warp-svc.log 2>/dev/null
+# ============================================================
+# 6. 配置 nftables NAT 规则（透明全局代理）
+#    原理：所有从容器发出的流量经过 CloudflareWARP 接口出去，
+#          并做 masquerade 使得回程流量能正确返回。
+# ============================================================
+echo "[warp-global] Setting up nftables NAT rules..."
 
-echo ""
-echo "=========================================="
-echo "9. 检查出口 IP..."
-echo "=========================================="
-echo -n "IPv4: "
-curl -s -4 ifconfig.me || echo "获取失败"
-echo ""
-echo -n "IPv6: "
-curl -s -6 ifconfig.me || echo "获取失败"
+# --- IPv4 ---
+sudo nft add table ip nat
+sudo nft add chain ip nat WARP_NAT '{ type nat hook postrouting priority 100 ; }'
+sudo nft add rule ip nat WARP_NAT oifname "CloudflareWARP" masquerade
 
-echo ""
-echo "=========================================="
-echo "脚本执行完毕，现在可以进入 shell 调试..."
-echo "=========================================="
+sudo nft add table ip mangle
+sudo nft add chain ip mangle forward '{ type filter hook forward priority mangle ; }'
+# 修正 TCP MSS，避免大包在虚拟网卡的 MTU 下被丢弃
+sudo nft add rule ip mangle forward tcp flags syn tcp option maxseg size set rt mtu
 
-# 保持容器运行，但不阻塞 shell
+# --- IPv6 ---
+sudo nft add table ip6 nat
+sudo nft add chain ip6 nat WARP_NAT '{ type nat hook postrouting priority 100 ; }'
+sudo nft add rule ip6 nat WARP_NAT oifname "CloudflareWARP" masquerade
+
+sudo nft add table ip6 mangle
+sudo nft add chain ip6 mangle forward '{ type filter hook forward priority mangle ; }'
+sudo nft add rule ip6 mangle forward tcp flags syn tcp option maxseg size set rt mtu
+
+echo "[warp-global] NAT rules configured."
+echo "[warp-global] Global WARP mode is now active. All traffic goes through Cloudflare WARP."
+
+# 验证连接
+echo "[warp-global] Verifying WARP connection..."
+warp-cli --accept-tos status
+
+# 保持容器运行
 tail -f /dev/null

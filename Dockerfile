@@ -1,4 +1,4 @@
-FROM debian:12-slim
+FROM jrei/systemd-debian:bookworm
 
 ARG FRP_VERSION=0.68.1
 

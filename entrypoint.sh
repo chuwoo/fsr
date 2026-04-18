@@ -69,4 +69,49 @@ if [ -f /etc/frp/frpc.toml ]; then
 else
     echo "⚠️ 无配置文件，保持运行"
     tail -f /dev/null
-fi
+fi#!/bin/bash
+set -e
+
+echo "=========================================="
+echo "  WARP 调试脚本"
+echo "=========================================="
+
+# 显示环境变量
+echo "WARP_TOKEN: ${WARP_TOKEN:0:50}..."
+
+# 清理旧进程
+echo "[1/4] 清理旧进程..."
+pkill -f warp 2>/dev/null || true
+pkill -f frpc 2>/dev/null || true
+sleep 2
+
+# 配置 MDM
+echo "[2/4] 配置 WARP MDM..."
+mkdir -p /var/lib/cloudflare-warp
+cat > /var/lib/cloudflare-warp/mdm.xml << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<dict>
+    <key>organization</key>
+    <string>vochat.teams.cloudflare.com</string>
+</dict>
+EOF
+echo "✅ MDM 配置完成"
+
+# 启动 WARP daemon
+echo "[3/4] 启动 WARP daemon..."
+nohup /usr/bin/warp-svc > /var/log/warp-svc.log 2>&1 &
+sleep 5
+echo "✅ warp-svc 已启动"
+
+# 检查 warp-cli 命令
+echo ""
+echo "[4/4] 检查 warp-cli 命令..."
+warp-cli --help
+
+echo ""
+echo "=========================================="
+echo "检查完毕，容器保持运行..."
+echo "=========================================="
+
+# 保持容器运行
+tail -f /dev/null

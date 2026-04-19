@@ -200,11 +200,7 @@ curl -fsSL "$FRP_URL" -o /etc/frp/frpc.toml || {
 
 echo "✅ 配置下载成功"
 
-# 【核心魔法】：
-# 先删除可能存在的旧 proxySettings 防止 TOML 重复键报错，然后在末尾强行注入代理配置
-sed -i '/^\[transport\.proxySettings\]/,+3d' /etc/frp/frpc.toml
 
-echo -e "\n[transport.proxySettings]\ntype = \"socks5\"\naddress = \"127.0.0.1\"\nport = ${NET_PORT}" >> /etc/frp/frpc.toml
 
 echo "============================================"
 echo "🛠️ 最终生效的 frpc 配置如下："

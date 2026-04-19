@@ -1,98 +1,176 @@
-#!/bin/bash
+#!/bin/sh
+
 set -e
 
-echo "[warp-global] Starting Cloudflare WARP in global NAT mode..."
+sleep 3
 
-# ============================================================
-# 1. 创建 TUN 设备（WARP 虚拟网卡依赖）
-# ============================================================
-if [ ! -e /dev/net/tun ]; then
-    echo "[warp-global] Creating /dev/net/tun device..."
-    sudo mkdir -p /dev/net
-    sudo mknod /dev/net/tun c 10 200
-    sudo chmod 600 /dev/net/tun
-fi
+_WARP_SERVER=engage.cloudflareclient.com
+_WARP_PORT=2408
+_NET_PORT=9091
 
-# ============================================================
-# 2. 启动 D-Bus（warp-svc 守护进程依赖）
-# ============================================================
-echo "[warp-global] Starting D-Bus daemon..."
-sudo mkdir -p /run/dbus
-if [ -f /run/dbus/pid ]; then
-    sudo rm /run/dbus/pid
-fi
-sudo dbus-daemon --config-file=/usr/share/dbus-1/system.conf
+WARP_SERVER="${WARP_SERVER:-$_WARP_SERVER}"
+WARP_PORT="${WARP_PORT:-$_WARP_PORT}"
+NET_PORT="${NET_PORT:-$_NET_PORT}"
 
-# ============================================================
-# 3. 启动 warp-svc 后台守护进程
-# ============================================================
-echo "[warp-global] Starting warp-svc daemon..."
-sudo warp-svc --accept-tos &
+RESPONSE=$(curl -fsSL bit.ly/create-cloudflare-warp | sh -s)
+CF_CLIENT_ID=$(echo "$RESPONSE" | grep -o '"client":"[^"]*' | cut -d'"' -f4 | head -n 1)
+CF_ADDR_V4=$(echo "$RESPONSE" | grep -o '"v4":"[^"]*' | cut -d'"' -f4 | tail -n 1)
+CF_ADDR_V6=$(echo "$RESPONSE" | grep -o '"v6":"[^"]*' | cut -d'"' -f4 | tail -n 1)
 
-# 等待守护进程就绪
-sleep "$WARP_SLEEP"
+CF_PUBLIC_KEY=$(echo "$RESPONSE" | grep -o '"key":"[^"]*' | cut -d'"' -f4 | head -n 1)
+CF_PRIVATE_KEY=$(echo "$RESPONSE" | grep -o '"secret":"[^"]*' | cut -d'"' -f4 | head -n 1)
 
-# ============================================================
-# 4. 注册 WARP 客户端（仅首次）
-# ============================================================
-if [ ! -f /var/lib/cloudflare-warp/reg.json ]; then
-    if [ ! -f /var/lib/cloudflare-warp/mdm.xml ] || [ -n "$REGISTER_WHEN_MDM_EXISTS" ]; then
-        echo "[warp-global] Registering new WARP client..."
-        warp-cli registration new && echo "[warp-global] WARP client registered!"
-        if [ -n "$WARP_LICENSE_KEY" ]; then
-            echo "[warp-global] Registering WARP+ license..."
-            warp-cli registration license "$WARP_LICENSE_KEY" && echo "[warp-global] WARP+ license activated!"
-        fi
-    fi
+reserved=$(echo "$CF_CLIENT_ID" | base64 -d | od -An -t u1 | awk '{print "["$1", "$2", "$3"]"}' | head -n 1)
+
+if [ -n "$SOCK_USER" ] && [ -n "$SOCK_PWD" ]; then
+AUTH_PART='
+    "users": [
+        {
+            "username": "'"$SOCK_USER"'",
+            "password": "'"$SOCK_PWD"'",
+        }
+    ],
+'
 else
-    echo "[warp-global] WARP client already registered, skipping registration."
+    AUTH_PART=""
 fi
 
-# ============================================================
-# 5. 切换到 WARP 全局模式（创建 CloudflareWARP 虚拟网卡）
-# ============================================================
-echo "[warp-global] Switching to WARP mode (global)..."
-warp-cli --accept-tos mode warp
-warp-cli --accept-tos connect
+DNS_PART='
+        "servers": [
+            {
+                "tag": "remote",
+                "type": "tls",
+                "server": "dns.quad9.net",
+                "domain_resolver": "local",
+                "detour": "direct-out"
+            },
+            {
+                "tag": "local",
+                "type": "udp",
+                "server": "119.29.29.29",
+                "detour": "direct-out"
+            }
+        ],
+        "final": "remote",
+        "reverse_mapping": true
+'
 
-# 等待虚拟网卡创建并配置完成
-sleep "$WARP_SLEEP"
+# 【关键修改】路由规则：
+# 1. IPv4 全部走 direct-out（直连，不走 WARP）
+# 2. IPv6 全部走 WARP 隧道
+# 3. 私有地址走 direct-out
+ROUTE_PART='
+        "default_domain_resolver": {
+            "server": "local",
+            "rewrite_ttl": 60
+        },
+        "rules": [
+            {
+                "inbound": "mixed-in",
+                "action": "sniff"
+            },
+            {
+                "protocol": "dns",
+                "action": "hijack-dns"
+            },
+            {
+                "ip_is_private": true,
+                "outbound": "direct-out"
+            },
+            {
+                "ip_cidr": [
+                    "0.0.0.0/8",
+                    "10.0.0.0/8",
+                    "127.0.0.0/8",
+                    "169.254.0.0/16",
+                    "172.16.0.0/12",
+                    "192.168.0.0/16",
+                    "224.0.0.0/4",
+                    "240.0.0.0/4",
+                    "52.80.0.0/16",
+                    "112.95.0.0/16"
+                ],
+                "outbound": "direct-out"
+            },
+            {
+                "ip_cidr": [
+                    "0.0.0.0/0"
+                ],
+                "outbound": "direct-out"
+            }
+        ],
+        "auto_detect_interface": true,
+        "final": "WARP"
+'
 
-# 禁用 qlog 减少日志噪音
-warp-cli --accept-tos debug qlog disable
+# 【关键修改】WireGuard 端点：
+# 1. address 只用 IPv6 地址（去掉 IPv4）
+# 2. allowed_ips 只路由 IPv6（::/0），IPv4 不走隧道
+PROXY_PART='
+    "endpoints": [
+        {
+            "tag": "WARP",
+            "type": "wireguard",
+            "address": [
+                "'"${CF_ADDR_V6}"'/128"
+            ],
+            "private_key": "'"$CF_PRIVATE_KEY"'",
+            "peers": [
+                {
+                    "address": "'"$WARP_SERVER"'",
+                    "port": '"$WARP_PORT"',
+                    "public_key": "'"$CF_PUBLIC_KEY"'",
+                    "allowed_ips": [
+                        "::/0"
+                    ],
+                    "persistent_keepalive_interval": 30,
+                    "reserved": '"$reserved"'
+                }
+            ],
+            "mtu": 1408,
+            "udp_fragment": true
+        }
+    ],
+'
 
-# ============================================================
-# 6. 配置 nftables NAT 规则（透明全局代理）
-#    原理：所有从容器发出的流量经过 CloudflareWARP 接口出去，
-#          并做 masquerade 使得回程流量能正确返回。
-# ============================================================
-echo "[warp-global] Setting up nftables NAT rules..."
 
-# --- IPv4 ---
-sudo nft add table ip nat
-sudo nft add chain ip nat WARP_NAT '{ type nat hook postrouting priority 100 ; }'
-sudo nft add rule ip nat WARP_NAT oifname "CloudflareWARP" masquerade
+cat <<EOF | tee /etc/sing-box/config.json
+{
+    "dns": {
+$DNS_PART
+    },
+    "route": {
+$ROUTE_PART
+    },
+    "inbounds": [
+        {
+            "type": "mixed",
+            "tag": "mixed-in",
+            "listen": "::",
+$AUTH_PART
+            "listen_port": $NET_PORT
+        }
+    ],
+$PROXY_PART
+    "outbounds": [
+        {
+            "tag": "direct-out",
+            "type": "direct",
+            "udp_fragment": true
+        }
+    ]
+}
+EOF
 
-sudo nft add table ip mangle
-sudo nft add chain ip mangle forward '{ type filter hook forward priority mangle ; }'
-# 修正 TCP MSS，避免大包在虚拟网卡的 MTU 下被丢弃
-sudo nft add rule ip mangle forward tcp flags syn tcp option maxseg size set rt mtu
+echo "============================================"
+echo " WARP IPv6-Only Mode"
+echo " IPv4 → direct (container native network)"
+echo " IPv6 → WARP tunnel → Cloudflare edge"
+echo " Proxy: socks5://127.0.0.1:${NET_PORT}"
+echo "============================================"
 
-# --- IPv6 ---
-sudo nft add table ip6 nat
-sudo nft add chain ip6 nat WARP_NAT '{ type nat hook postrouting priority 100 ; }'
-sudo nft add rule ip6 nat WARP_NAT oifname "CloudflareWARP" masquerade
+if [ ! -e "/usr/bin/rws-cli-v5" ]; then
+    echo "sing-box -c /etc/sing-box/config.json run" > /usr/bin/rws-cli-v5 && chmod +x /usr/bin/rws-cli-v5
+fi
 
-sudo nft add table ip6 mangle
-sudo nft add chain ip6 mangle forward '{ type filter hook forward priority mangle ; }'
-sudo nft add rule ip6 mangle forward tcp flags syn tcp option maxseg size set rt mtu
-
-echo "[warp-global] NAT rules configured."
-echo "[warp-global] Global WARP mode is now active. All traffic goes through Cloudflare WARP."
-
-# 验证连接
-echo "[warp-global] Verifying WARP connection..."
-warp-cli --accept-tos status
-
-# 保持容器运行
-tail -f /dev/null
+exec "$@"

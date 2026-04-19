@@ -1,13 +1,15 @@
 FROM alpine:3.22
 
-LABEL maintainer="WARP-IPv6-Only" \
-    org.opencontainers.image.title="Docker-Warp-Socks-IPv6" \
-    org.opencontainers.image.description="Connect to CloudFlare WARP IPv6 only, exposing socks5 proxy."
+LABEL maintainer="WARP-IPv6-frpc" \
+    org.opencontainers.image.title="Docker-WARP-IPv6-frpc" \
+    org.opencontainers.image.description="Integrated sing-box WARP IPv6 tunnel with frpc."
 
+# 安装依赖：增加了 netcat-openbsd 用于检测端口就绪
 RUN apk update && apk upgrade \
-    && apk add --no-cache curl openssl jq tar gcompat \
+    && apk add --no-cache curl openssl jq tar gcompat netcat-openbsd \
     && rm -rf /var/cache/apk/*
 
+# 下载 sing-box
 RUN set -e; \
     cd /tmp && \
     ARCH='amd64' && \
@@ -30,8 +32,21 @@ RUN set -e; \
     mkdir -p /etc/sing-box && \
     rm -rf /tmp/*
 
+# 下载 frpc 0.68.1
+ARG FRP_VERSION=0.68.1
+RUN set -e; \
+    ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64) FRP_ARCH="amd64" ;; \
+        aarch64) FRP_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1 ;; \
+    esac && \
+    echo "Downloading frpc v${FRP_VERSION} for linux_${FRP_ARCH}..." && \
+    curl -fsSL "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_${FRP_ARCH}.tar.gz" | \
+    tar xz --strip-components=1 -C /usr/local/bin "frp_${FRP_VERSION}_linux_${FRP_ARCH}/frpc" && \
+    chmod +x /usr/local/bin/frpc
+
 COPY entrypoint.sh /run/entrypoint.sh
 RUN chmod +x /run/entrypoint.sh
-ENTRYPOINT ["/run/entrypoint.sh"]
 
-CMD ["rws-cli-v5"]
+ENTRYPOINT ["/run/entrypoint.sh"]

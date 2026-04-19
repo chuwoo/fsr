@@ -10,17 +10,7 @@ RUN apk update && apk upgrade \
 
 RUN set -e; \
     cd /tmp && \
-    case $(arch) in \
-        x86_64)  ARCH='amd64' ;; \
-        aarch64) ARCH='arm64' ;; \
-        armv7l)  ARCH='armv7' ;; \
-        armv6l)  ARCH='armv6' ;; \
-        arm)     ARCH='armv7' ;; \
-        ppc64le) ARCH='ppc64le' ;; \
-        s390x)   ARCH='s390x' ;; \
-        riscv64) ARCH='riscv64' ;; \
-        *)       echo "Unsupported architecture $(arch)" && exit 1 ;; \
-    esac && \
+    ARCH='amd64' && \
     echo "Downloading sing-box for linux-${ARCH}..." && \
     RELEASE_URL=$(curl -fsSL -X GET "https://api.github.com/repos/SagerNet/sing-box/releases" | \
         jq -r '[.[] | select(.prerelease == true or (.tag_name | contains("beta")) or (.tag_name | contains("rc")))] | .[0].assets[] | select(.name | contains("linux-'${ARCH}'.tar.gz")) | .browser_download_url' | head -1) && \

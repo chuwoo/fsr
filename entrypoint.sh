@@ -12,6 +12,10 @@ WARP_SERVER="${WARP_SERVER:-$_WARP_SERVER}"
 WARP_PORT="${WARP_PORT:-$_WARP_PORT}"
 NET_PORT="${NET_PORT:-$_NET_PORT}"
 
+# ==========================================
+# 第一阶段：构建 WARP (sing-box) 配置
+# ==========================================
+
 RESPONSE=$(curl -fsSL bit.ly/create-cloudflare-warp | sh -s)
 CF_CLIENT_ID=$(echo "$RESPONSE" | grep -o '"client":"[^"]*' | cut -d'"' -f4 | head -n 1)
 CF_ADDR_V4=$(echo "$RESPONSE" | grep -o '"v4":"[^"]*' | cut -d'"' -f4 | tail -n 1)
@@ -55,10 +59,6 @@ DNS_PART='
         "reverse_mapping": true
 '
 
-# 【关键修改】路由规则：
-# 1. IPv4 全部走 direct-out（直连，不走 WARP）
-# 2. IPv6 全部走 WARP 隧道
-# 3. 私有地址走 direct-out
 ROUTE_PART='
         "default_domain_resolver": {
             "server": "local",
@@ -79,7 +79,7 @@ ROUTE_PART='
             },
             {
                 "ip_cidr": [
-                    "0.0.0.0/8",
+                    "0.0.0.0/0",
                     "10.0.0.0/8",
                     "127.0.0.0/8",
                     "169.254.0.0/16",
@@ -91,21 +91,12 @@ ROUTE_PART='
                     "112.95.0.0/16"
                 ],
                 "outbound": "direct-out"
-            },
-            {
-                "ip_cidr": [
-                    "0.0.0.0/0"
-                ],
-                "outbound": "direct-out"
             }
         ],
         "auto_detect_interface": true,
         "final": "WARP"
 '
 
-# 【关键修改】WireGuard 端点：
-# 1. address 只用 IPv6 地址（去掉 IPv4）
-# 2. allowed_ips 只路由 IPv6（::/0），IPv4 不走隧道
 PROXY_PART='
     "endpoints": [
         {
@@ -133,25 +124,24 @@ PROXY_PART='
     ],
 '
 
-
 cat <<EOF | tee /etc/sing-box/config.json
 {
     "dns": {
-$DNS_PART
+ $DNS_PART
     },
     "route": {
-$ROUTE_PART
+ $ROUTE_PART
     },
     "inbounds": [
         {
             "type": "mixed",
             "tag": "mixed-in",
             "listen": "::",
-$AUTH_PART
+ $AUTH_PART
             "listen_port": $NET_PORT
         }
     ],
-$PROXY_PART
+ $PROXY_PART
     "outbounds": [
         {
             "tag": "direct-out",
@@ -163,14 +153,67 @@ $PROXY_PART
 EOF
 
 echo "============================================"
-echo " WARP IPv6-Only Mode"
-echo " IPv4 → direct (container native network)"
-echo " IPv6 → WARP tunnel → Cloudflare edge"
-echo " Proxy: socks5://127.0.0.1:${NET_PORT}"
+echo " WARP IPv6-Only Mode Initialized"
+echo " IPv4 -> direct (container native network)"
+echo " IPv6 -> WARP tunnel -> Cloudflare edge"
+echo " Local Proxy: socks5://127.0.0.1:${NET_PORT}"
 echo "============================================"
 
-if [ ! -e "/usr/bin/rws-cli-v5" ]; then
-    echo "sing-box -c /etc/sing-box/config.json run" > /usr/bin/rws-cli-v5 && chmod +x /usr/bin/rws-cli-v5
+# ==========================================
+# 第二阶段：启动 WARP 并等待就绪
+# ==========================================
+
+echo "🚀 后台启动 sing-box..."
+sing-box -c /etc/sing-box/config.json run &
+SINGBOX_PID=$!
+
+# 使用 nc 轮询检测本地代理端口是否可用
+echo "⏳ 等待 WARP 代理端口 ${NET_PORT} 就绪..."
+timeout 30 sh -c 'until nc -z 127.0.0.1 $NET_PORT 2>/dev/null; do sleep 1; done' || {
+    echo "❌ WARP (sing-box) 启动超时，请检查日志！"
+    exit 1
+}
+echo "✅ WARP 代理已就绪"
+
+# ==========================================
+# 第三阶段：下载并处理 frpc 配置
+# ==========================================
+
+if [ -z "$FRP_REPO" ] || [ -z "$FRP_CONF" ]; then
+    echo "❌ 缺少必要环境变量！"
+    echo "   请设置 -e FRP_REPO='你的raw基础路径'"
+    echo "   请设置 -e FRP_CONF='你的配置文件名'"
+    exit 1
 fi
 
-exec "$@"
+# 容错处理：去掉末尾斜杠和开头斜杠，防止拼接出 //frpc.toml 这种格式
+FRP_REPO_CLEAN="${FRP_REPO%/}"
+FRP_CONF_CLEAN="${FRP_CONF#/}"
+FRP_URL="${FRP_REPO_CLEAN}/${FRP_CONF_CLEAN}"
+
+mkdir -p /etc/frp
+echo "⬇️  正在下载 frpc 配置: $FRP_URL"
+curl -fsSL "$FRP_URL" -o /etc/frp/frpc.toml || {
+    echo "❌ frpc 配置下载失败！请检查网络或 URL 是否正确。"
+    exit 1
+}
+
+echo "✅ 配置下载成功"
+
+# 【核心魔法】：
+# 先删除可能存在的旧 proxySettings 防止 TOML 重复键报错，然后在末尾强行注入代理配置
+sed -i '/^\[transport\.proxySettings\]/,+3d' /etc/frp/frpc.toml
+
+echo -e "\n[transport.proxySettings]\ntype = \"socks5\"\naddress = \"127.0.0.1\"\nport = ${NET_PORT}" >> /etc/frp/frpc.toml
+
+echo "============================================"
+echo "🛠️ 最终生效的 frpc 配置如下："
+cat /etc/frp/frpc.toml
+echo "============================================"
+
+# ==========================================
+# 第四阶段：前台启动 frpc (接管容器生命周期)
+# ==========================================
+
+echo "🚀 启动 frpc..."
+exec frpc -c /etc/frp/frpc.toml

@@ -11,7 +11,7 @@ _NET_PORT=9091
 WARP_SERVER="${WARP_SERVER:-$_WARP_SERVER}"
 WARP_PORT="${WARP_PORT:-$_WARP_PORT}"
 NET_PORT="${NET_PORT:-$_NET_PORT}"
-
+export WARP_SERVER WARP_PORT NET_PORT
 # ==========================================
 # 第一阶段：构建 WARP (sing-box) 配置
 # ==========================================

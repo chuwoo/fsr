@@ -1,104 +1,47 @@
-ARG BASE_IMAGE=ubuntu:22.04
-FROM ${BASE_IMAGE}
+FROM alpine:3.22
 
-ARG WARP_VERSION
-ARG COMMIT_SHA
+LABEL maintainer="WARP-IPv6-Only" \
+    org.opencontainers.image.title="Docker-Warp-Socks-IPv6" \
+    org.opencontainers.image.description="Connect to CloudFlare WARP IPv6 only, exposing socks5 proxy."
 
-LABEL org.opencontainers.image.authors="warp-global"
-LABEL org.opencontainers.image.url="https://github.com/cmj2002/warp-docker"
-LABEL WARP_VERSION=${WARP_VERSION}
-LABEL COMMIT_SHA=${COMMIT_SHA}
+RUN apk update && apk upgrade \
+    && apk add --no-cache curl openssl jq tar gcompat \
+    && rm -rf /var/cache/apk/*
 
-# ─── 安装依赖 ───
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y curl gnupg lsb-release sudo jq ipcalc nftables && \
-    curl https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list && \
-    apt-get update && \
-    apt-get install -y cloudflare-warp && \
-    apt-get clean && \
-    apt-get autoremove -y && \
-    useradd -m -s /bin/bash warp && \
-    echo "warp ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/warp
+RUN set -e; \
+    cd /tmp && \
+    case $(arch) in \
+        x86_64)  ARCH='amd64' ;; \
+        aarch64) ARCH='arm64' ;; \
+        armv7l)  ARCH='armv7' ;; \
+        armv6l)  ARCH='armv6' ;; \
+        arm)     ARCH='armv7' ;; \
+        ppc64le) ARCH='ppc64le' ;; \
+        s390x)   ARCH='s390x' ;; \
+        riscv64) ARCH='riscv64' ;; \
+        *)       echo "Unsupported architecture $(arch)" && exit 1 ;; \
+    esac && \
+    echo "Downloading sing-box for linux-${ARCH}..." && \
+    RELEASE_URL=$(curl -fsSL -X GET "https://api.github.com/repos/SagerNet/sing-box/releases" | \
+        jq -r '[.[] | select(.prerelease == true or (.tag_name | contains("beta")) or (.tag_name | contains("rc")))] | .[0].assets[] | select(.name | contains("linux-'${ARCH}'.tar.gz")) | .browser_download_url' | head -1) && \
+    if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then \
+        echo "No beta found, using latest stable release..." && \
+        RELEASE_URL=$(curl -fsSL -X GET "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | \
+            jq -r '.assets[] | select(.name | contains("linux-'${ARCH}'.tar.gz")) | .browser_download_url' | head -1); \
+    fi && \
+    if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then \
+        echo "No release found for architecture: ${ARCH}" && exit 1; \
+    fi && \
+    echo "Downloading from: ${RELEASE_URL}" && \
+    curl -fsSL "$RELEASE_URL" -o singbox.tar.gz && \
+    tar xzf singbox.tar.gz && \
+    find . -name "sing-box" -type f -executable -exec mv {} /usr/bin/sing-box \; && \
+    chmod +x /usr/bin/sing-box && \
+    mkdir -p /etc/sing-box && \
+    rm -rf /tmp/*
 
-# ─── 内联 entrypoint.sh ───
-RUN printf '#!/bin/bash\nset -e\n\
-echo "[warp-global] Starting Cloudflare WARP in global NAT mode..."\n\
-\n\
-if [ ! -e /dev/net/tun ]; then\n\
-    echo "[warp-global] Creating /dev/net/tun device..."\n\
-    sudo mkdir -p /dev/net\n\
-    sudo mknod /dev/net/tun c 10 200\n\
-    sudo chmod 600 /dev/net/tun\n\
-fi\n\
-\n\
-echo "[warp-global] Starting D-Bus daemon..."\n\
-sudo mkdir -p /run/dbus\n\
-if [ -f /run/dbus/pid ]; then\n\
-    sudo rm /run/dbus/pid\n\
-fi\n\
-sudo dbus-daemon --config-file=/usr/share/dbus-1/system.conf\n\
-\n\
-echo "[warp-global] Starting warp-svc daemon..."\n\
-sudo warp-svc --accept-tos &\n\
-sleep "$WARP_SLEEP"\n\
-\n\
-if [ ! -f /var/lib/cloudflare-warp/reg.json ]; then\n\
-    if [ ! -f /var/lib/cloudflare-warp/mdm.xml ] || [ -n "$REGISTER_WHEN_MDM_EXISTS" ]; then\n\
-        echo "[warp-global] Registering new WARP client..."\n\
-        warp-cli registration new && echo "[warp-global] WARP client registered!"\n\
-        if [ -n "$WARP_LICENSE_KEY" ]; then\n\
-            echo "[warp-global] Registering WARP+ license..."\n\
-            warp-cli registration license "$WARP_LICENSE_KEY" && echo "[warp-global] WARP+ license activated!"\n\
-        fi\n\
-    fi\n\
-else\n\
-    echo "[warp-global] WARP client already registered, skipping registration."\n\
-fi\n\
-\n\
-echo "[warp-global] Switching to WARP mode (global)..."\n\
-warp-cli --accept-tos mode warp\n\
-warp-cli --accept-tos connect\n\
-sleep "$WARP_SLEEP"\n\
-warp-cli --accept-tos debug qlog disable\n\
-\n\
-echo "[warp-global] Setting up nftables NAT rules..."\n\
-sudo nft add table ip nat\n\
-sudo nft add chain ip nat WARP_NAT "{ type nat hook postrouting priority 100 ; }"\n\
-sudo nft add rule ip nat WARP_NAT oifname "CloudflareWARP" masquerade\n\
-sudo nft add table ip mangle\n\
-sudo nft add chain ip mangle forward "{ type filter hook forward priority mangle ; }"\n\
-sudo nft add rule ip mangle forward tcp flags syn tcp option maxseg size set rt mtu\n\
-sudo nft add table ip6 nat\n\
-sudo nft add chain ip6 nat WARP_NAT "{ type nat hook postrouting priority 100 ; }"\n\
-sudo nft add rule ip6 nat WARP_NAT oifname "CloudflareWARP" masquerade\n\
-sudo nft add table ip6 mangle\n\
-sudo nft add chain ip6 mangle forward "{ type filter hook forward priority mangle ; }"\n\
-sudo nft add rule ip6 mangle forward tcp flags syn tcp option maxseg size set rt mtu\n\
-\n\
-echo "[warp-global] NAT rules configured."\n\
-echo "[warp-global] Global WARP mode is now active. All traffic goes through Cloudflare WARP."\n\
-echo "[warp-global] Verifying WARP connection..."\n\
-warp-cli --accept-tos status\n\
-\n\
-tail -f /dev/null\n' > /entrypoint.sh && chmod +x /entrypoint.sh
+COPY entrypoint.sh /run/entrypoint.sh
+RUN chmod +x /run/entrypoint.sh
+ENTRYPOINT ["/run/entrypoint.sh"]
 
-# ─── 内联 healthcheck ───
-RUN mkdir -p /healthcheck && \
-    printf '#!/bin/bash\nset -e\npgrep -x "warp-svc" > /dev/null || { echo "warp-svc not running"; exit 1; }\nip link show CloudflareWARP > /dev/null 2>&1 || { echo "CloudflareWARP not found"; exit 1; }\necho "WARP is healthy"\nexit 0\n' > /healthcheck/index.sh && \
-    chmod +x /healthcheck/index.sh
-
-USER warp
-
-RUN mkdir -p /home/warp/.local/share/warp && \
-    echo -n 'yes' > /home/warp/.local/share/warp/accepted-tos.txt
-
-ENV WARP_SLEEP=2
-ENV WARP_LICENSE_KEY=
-ENV REGISTER_WHEN_MDM_EXISTS=
-
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD /healthcheck/index.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["rws-cli-v5"]
